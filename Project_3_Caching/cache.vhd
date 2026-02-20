@@ -88,14 +88,14 @@ BEGIN
 RETURN main_addr;
 END FUNCTION;
 
-FUNCTION hit(addr: ADDR) RETURN BOOLEAN IS
+IMPURE FUNCTION hit(addr: ADDR) RETURN BOOLEAN IS
 	VARIABLE hit_result: BOOLEAN := FALSE;
 BEGIN
 	hit_result := (cache_array(addr.index).valid = '1') AND (cache_array(addr.index).tag = addr.tag);
 RETURN hit_result;
 END FUNCTION;
 
-FUNCTION need_write_back(addr: ADDR) RETURN BOOLEAN IS
+IMPURE FUNCTION need_write_back(addr: ADDR) RETURN BOOLEAN IS
 	VARIABLE valid: BOOLEAN := (cache_array(addr.index).valid = '1');
 	VARIABLE match: BOOLEAN := (cache_array(addr.index).tag = addr.tag);
 	VARIABLE dirty: BOOLEAN := (cache_array(addr.index).dirty = '1');
@@ -105,7 +105,7 @@ BEGIN
 RETURN need;
 END FUNCTION;
 
-FUNCTION read_word(addr: ADDR) RETURN STD_LOGIC_VECTOR(31 downto 0) IS
+IMPURE FUNCTION read_word(addr: ADDR) RETURN STD_LOGIC_VECTOR(31 downto 0) IS
 	VARIABLE word_out: STD_LOGIC_VECTOR(31 downto 0);
 	VARIABLE byte_offset: INTEGER := addr.offset * 4; -- convert word offset to byte offset
 BEGIN
@@ -113,7 +113,7 @@ BEGIN
 RETURN word_out;
 END FUNCTION;
 
-FUNCTION write_word(addr: ADDR; data_in: STD_LOGIC_VECTOR(31 downto 0)) RETURN CACHE_BLOCK IS
+IMPURE FUNCTION write_word(addr: ADDR; data_in: STD_LOGIC_VECTOR(31 downto 0)) RETURN CACHE_BLOCK IS
 	VARIABLE block_write: CACHE_BLOCK;
 	VARIABLE byte_offset: INTEGER := addr.offset * 4; -- convert word offset to byte offset
 BEGIN
@@ -125,7 +125,7 @@ BEGIN
 RETURN block_write;
 END FUNCTION;
 
-FUNCTION evict_block_addr(addr: ADDR) RETURN INTEGER IS
+IMPURE FUNCTION evict_block_addr(addr: ADDR) RETURN INTEGER IS
 	VARIABLE block_evict: CACHE_BLOCK;
 	VARIABLE wb_main_addr: INTEGER;
 BEGIN
