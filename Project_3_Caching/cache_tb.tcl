@@ -22,9 +22,13 @@ proc AddWaves {} {
     ;# Cache internal state
     add wave -position end sim:/cache_tb/dut/state
     add wave -position end -radix unsigned sim:/cache_tb/dut/cache_address
-    add wave -position end -radix hex sim:/cache_tb/dut/cache_read_data
+    add wave -position end -radix hex sim:/cache_tb/dut/read_data_buffer
+    add wave -position end -radix hex sim:/cache_tb/dut/write_data_buffer
     add wave -position end -radix unsigned sim:/cache_tb/dut/read_byte_count
     add wave -position end -radix unsigned sim:/cache_tb/dut/write_byte_count
+    add wave -position end -radix unsigned sim:/cache_tb/dut/hit_signal
+    add wave -position end -radix unsigned sim:/cache_tb/dut/need_write_back_signal
+
 }
 
 vlib work

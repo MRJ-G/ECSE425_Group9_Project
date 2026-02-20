@@ -48,17 +48,16 @@ TYPE CACHE_BLOCK IS RECORD -- declaire a record type to represent one cache bloc
 	tag : INTEGER range 0 to 63;
 END RECORD;
 TYPE CACHE IS ARRAY(num_blocks-1 downto 0) OF CACHE_BLOCK;	-- the entire cache
-SIGNAL cache_array: CACHE;
+SIGNAL cache_array: CACHE := (OTHERS => (data => (OTHERS => '0'), valid => '0', dirty => '0', tag => 0));
 
 TYPE ADDR IS RECORD -- total 15 bits
 	tag : INTEGER range 0 to 63;			-- 6 bits
 	index : INTEGER range 0 to 31;			-- 5 bits
-	offset : INTEGER range 0 to 3;			-- 2 bits (word offset)
+	offset : INTEGER range 0 to 3;			-- 4(-2) bits but ignore last 2 bits since word-aligned
 END RECORD;
 SIGNAL cache_address: ADDR := (tag => 0, index => 0, offset => 0);
 
 SIGNAL resolved_main_addr: INTEGER := 0;
-SIGNAL cache_read_data: STD_LOGIC_VECTOR(31 downto 0) := (OTHERS => '0');
 -- buffer for reading data from memory, since we can only read one byte at a time from memory but need to read an entire block (16 bytes)
 SIGNAL read_data_buffer: STD_LOGIC_VECTOR(block_size-1 downto 0) := (OTHERS => '0');
 SIGNAL read_byte_count: INTEGER range 0 to block_size/8-1 := 0;
@@ -76,7 +75,7 @@ FUNCTION extract_addr(input: STD_LOGIC_VECTOR(31 downto 0)) RETURN ADDR IS
 BEGIN
 	effect_add.tag := to_integer(unsigned(input(14 downto 9)));		-- 6 bits for tag
 	effect_add.index := to_integer(unsigned(input(8 downto 4)));	-- 5 bits for index
-	effect_add.offset := to_integer(unsigned(input(3 downto 2)));	-- 4(-2) bits for offset but ignore last 2 bits since word-aligned
+	effect_add.offset := to_integer(unsigned(input(3 downto 0)));	-- 4(-2) bits for offset but ignore last 2 bits since word-aligned
 RETURN effect_add;
 END FUNCTION;
 
@@ -84,7 +83,7 @@ FUNCTION resolve_main_addr(addr: ADDR) RETURN INTEGER IS
 	VARIABLE main_addr: INTEGER;
 BEGIN
 	-- Calculate byte address: tag * (32 blocks * 16 bytes) + index * 16 bytes + offset * 4 bytes
-	main_addr := addr.tag * 512 + addr.index * 16 + addr.offset * 4;
+	main_addr := addr.tag * 512 + addr.index * 16 + addr.offset;
 RETURN main_addr;
 END FUNCTION;
 
@@ -107,7 +106,7 @@ END FUNCTION;
 
 IMPURE FUNCTION read_word(addr: ADDR) RETURN STD_LOGIC_VECTOR IS
 	VARIABLE word_out: STD_LOGIC_VECTOR(31 downto 0);
-	VARIABLE byte_offset: INTEGER := addr.offset * 4; -- convert word offset to byte offset
+	VARIABLE byte_offset: INTEGER := addr.offset;
 BEGIN
 	word_out := cache_array(addr.index).data((byte_offset+4)*8-1 downto byte_offset*8);
 RETURN word_out;
@@ -115,7 +114,7 @@ END FUNCTION;
 
 IMPURE FUNCTION write_word(addr: ADDR; data_in: STD_LOGIC_VECTOR(31 downto 0)) RETURN CACHE_BLOCK IS
 	VARIABLE block_write: CACHE_BLOCK;
-	VARIABLE byte_offset: INTEGER := addr.offset * 4; -- convert word offset to byte offset
+	VARIABLE byte_offset: INTEGER := addr.offset;
 BEGIN
 	block_write := cache_array(addr.index);
 	block_write.data((byte_offset+4)*8-1 downto byte_offset*8) := data_in;
@@ -135,6 +134,10 @@ BEGIN
 RETURN wb_main_addr;
 END FUNCTION;
 
+--################# debug signals #################--
+SIGNAL hit_signal: BOOLEAN := FALSE;
+SIGNAL need_write_back_signal: BOOLEAN := FALSE;
+
 begin
 
 -- make circuits here
@@ -148,7 +151,15 @@ begin
 			read_byte_count <= 0;
 			write_data_buffer <= (OTHERS => '0');
 			write_byte_count <= 0;
+			resolved_main_addr <= 0;
 			state <= IDLE;
+			-- Reset outputs
+			s_waitrequest <= '1';
+			s_readdata <= (OTHERS => '0');
+			m_read <= '0';
+			m_write <= '0';
+			m_addr <= 0;
+			m_writedata <= (OTHERS => '0');
 		ELSIF rising_edge(clock) THEN
 			CASE state IS
 				WHEN IDLE =>
@@ -159,9 +170,13 @@ begin
 						state <= IDLE;
 					END IF;
 				WHEN TAG =>
+				------------- Set debug signals for monitoring -------------
+					hit_signal <= hit(cache_address);
+					need_write_back_signal <= need_write_back(cache_address);
+				------------------------------------------------------------
 					IF hit(cache_address) THEN
 						IF s_read = '1' THEN
-							cache_read_data <= read_word(cache_address);
+							s_readdata <= read_word(cache_address);
 						ELSIF s_write = '1' THEN
 							cache_array(cache_address.index) <= write_word(cache_address, s_writedata);
 						END IF;
@@ -255,8 +270,6 @@ begin
 				m_write <= '0';
 		END CASE;
 	END PROCESS;
-
-	s_readdata <= cache_read_data;
 
 
 
