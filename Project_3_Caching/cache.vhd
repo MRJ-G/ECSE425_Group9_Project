@@ -53,7 +53,7 @@ SIGNAL cache_array: CACHE := (OTHERS => (data => (OTHERS => '0'), valid => '0', 
 TYPE ADDR IS RECORD -- total 15 bits
 	tag : INTEGER range 0 to 63;			-- 6 bits
 	index : INTEGER range 0 to 31;			-- 5 bits
-	offset : INTEGER range 0 to 3;			-- 4(-2) bits but ignore last 2 bits since word-aligned
+	offset : INTEGER range 0 to 12;			-- add[2:3], so [0, 4, 8, 12], ignore the last 2 bits for word-alignment
 END RECORD;
 SIGNAL cache_address: ADDR := (tag => 0, index => 0, offset => 0);
 
@@ -78,9 +78,9 @@ SIGNAL state: STATE_TYPE := IDLE;
 FUNCTION extract_addr(input: STD_LOGIC_VECTOR(31 downto 0)) RETURN ADDR IS
 	VARIABLE effect_add: ADDR;
 BEGIN
-	effect_add.tag := to_integer(unsigned(input(14 downto 9)));		-- 6 bits for tag
-	effect_add.index := to_integer(unsigned(input(8 downto 4)));	-- 5 bits for index
-	effect_add.offset := to_integer(unsigned(input(3 downto 0)));	-- 4(-2) bits for offset but ignore last 2 bits since word-aligned
+	effect_add.tag := to_integer(unsigned(input(14 downto 9)));
+	effect_add.index := to_integer(unsigned(input(8 downto 4)));
+	effect_add.offset := to_integer(unsigned(input(3 downto 2)))*4;	-- multiply by 4 to get byte offset
 RETURN effect_add;
 END FUNCTION;
 
