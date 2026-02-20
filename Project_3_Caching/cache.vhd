@@ -70,7 +70,7 @@ SIGNAL m_writedata_reg : STD_LOGIC_VECTOR(7 downto 0) := (OTHERS => '0');
 SIGNAL m_addr_reg : INTEGER range 0 to ram_size-1 := 0;
 
 --################# FSM signals #################--
-TYPE STATE_TYPE IS (IDLE, TAG, READ_MEM, WRITE_MEM, DONE);
+TYPE STATE_TYPE IS (IDLE, TAG, READ_MEM, READ_MEM_NEXT, WRITE_MEM, WRITE_MEM_NEXT, DONE);
 SIGNAL state: STATE_TYPE := IDLE;
 
 
@@ -203,26 +203,33 @@ begin
 						-- current write-one-byte-to-memory transaction has not been completed
 						state <= WRITE_MEM;
 					ELSIF m_waitrequest = '0' AND write_byte_count < block_size/8-1 THEN
+						-- Write one byte completed, prepare for next byte
 						m_addr_reg <= resolved_main_addr + write_byte_count;
 						m_writedata_reg <= write_data_buffer((write_byte_count+1)*8-1 downto write_byte_count*8);
 						write_byte_count <= write_byte_count + 1;
-						state <= WRITE_MEM;
+						state <= WRITE_MEM_NEXT;  -- Go to next state to generate m_write pulse
 					ELSIF m_waitrequest = '0' AND write_byte_count = block_size/8-1 THEN
+						-- All bytes written, now read new block
 						resolved_main_addr <= resolve_main_addr(cache_address);
 						read_data_buffer <= (OTHERS => '0');
 						read_byte_count <= 0;
 						state <= READ_MEM;
 					END IF;
+				WHEN WRITE_MEM_NEXT =>
+					-- Transition state: m_write = '0' here, will be '1' again in WRITE_MEM
+					state <= WRITE_MEM;
 				WHEN READ_MEM =>
 					IF m_waitrequest = '1' THEN
 						-- current read-one-byte-from-memory transaction has not been completed
 						state <= READ_MEM;
 					ELSIF m_waitrequest = '0' AND read_byte_count < block_size/8-1 THEN
+						-- Read completed, prepare for next byte
 						read_data_buffer((read_byte_count+1)*8-1 downto read_byte_count*8) <= m_readdata;
 						m_addr_reg <= resolved_main_addr + read_byte_count + 1;
 						read_byte_count <= read_byte_count + 1;
-						state <= READ_MEM;
+						state <= READ_MEM_NEXT;  -- Go to next state to generate m_read pulse
 					ELSIF m_waitrequest = '0' AND read_byte_count = block_size/8-1 THEN
+						-- Last byte read, update cache
 						read_data_buffer((read_byte_count+1)*8-1 downto read_byte_count*8) <= m_readdata;
 						-- Update cache block with new data using temp_block
 						temp_block.data := read_data_buffer;
@@ -232,6 +239,9 @@ begin
 						cache_array(cache_address.index) <= temp_block;
 						state <= DONE;
 					END IF;
+				WHEN READ_MEM_NEXT =>
+					-- Transition state: m_read = '0' here, will be '1' again in READ_MEM
+					state <= READ_MEM;
 				WHEN DONE =>
 					cache_address <= (tag => 0, index => 0, offset => 0);
 					read_data_buffer <= (OTHERS => '0');
@@ -247,6 +257,7 @@ begin
 
 	output_logic: PROCESS (state)
 	BEGIN
+		-- Default values
 		s_waitrequest <= '1';
 		m_read <= '0';
 		m_write <= '0';
@@ -257,8 +268,12 @@ begin
 				NULL;
 			WHEN WRITE_MEM =>
 				m_write <= '1';
+			WHEN WRITE_MEM_NEXT =>
+				NULL;  -- m_write = '0' to complete a memory transaction pulse
 			WHEN READ_MEM =>
 				m_read <= '1';
+			WHEN READ_MEM_NEXT =>
+				NULL;  -- m_read = '0', same reason as WRITE_MEM_NEXT
 			WHEN DONE =>
 				s_waitrequest <= '0';
 			WHEN OTHERS =>
