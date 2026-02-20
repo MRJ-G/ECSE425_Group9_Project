@@ -9,7 +9,7 @@ architecture behavior of cache_tb is
 
 component cache is
 generic(
-    ram_size : INTEGER := 32768;
+    ram_size : INTEGER := 32768
 );
 port(
     clock : in std_logic;
@@ -32,7 +32,7 @@ port(
 );
 end component;
 
-component memory is 
+component memory is
 GENERIC(
     ram_size : INTEGER := 32768;
     mem_delay : time := 10 ns;
@@ -49,7 +49,7 @@ PORT (
 );
 end component;
 	
--- test signals 
+-- test signals
 signal reset : std_logic := '0';
 signal clk : std_logic := '0';
 constant clk_period : time := 1 ns;
@@ -66,7 +66,7 @@ signal m_read : std_logic;
 signal m_readdata : std_logic_vector (7 downto 0);
 signal m_write : std_logic;
 signal m_writedata : std_logic_vector (7 downto 0);
-signal m_waitrequest : std_logic; 
+signal m_waitrequest : std_logic;
 
 begin
 
@@ -114,9 +114,89 @@ end process;
 
 test_process : process
 begin
-
--- put your tests here
-	
+    -- Initialize signals
+    s_read <= '0';
+    s_write <= '0';
+    s_addr <= (others => '0');
+    s_writedata <= (others => '0');
+    
+    -- Reset the cache
+    reset <= '1';
+    wait for clk_period;
+    reset <= '0';
+    wait for clk_period;
+    
+    report "Starting cache tests...";
+    
+    -- Test 1: Write to cache (address 0x0000)
+    report "Test 1: Write data 0xDEADBEEF to address 0x0000";
+    s_addr <= x"00000000";
+    s_write <= '1';
+    s_writedata <= x"DEADBEEF";
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    s_write <= '0';
+    wait for clk_period * 2;
+    
+    -- Test 2: Read from same address (should hit)
+    report "Test 2: Read from address 0x0000 (expect cache hit)";
+    s_addr <= x"00000000";
+    s_read <= '1';
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    assert s_readdata = x"DEADBEEF" 
+        report "ERROR: Read data mismatch! Expected 0xDEADBEEF, got " & to_hstring(s_readdata)
+        severity error;
+    report "Read data: " & to_hstring(s_readdata);
+    s_read <= '0';
+    wait for clk_period * 2;
+    
+    -- Test 3: Write to another address in same block
+    report "Test 3: Write data 0x12345678 to address 0x0004";
+    s_addr <= x"00000004";
+    s_write <= '1';
+    s_writedata <= x"12345678";
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    s_write <= '0';
+    wait for clk_period * 2;
+    
+    -- Test 4: Read from new address (should hit, same block)
+    report "Test 4: Read from address 0x0004 (expect cache hit)";
+    s_addr <= x"00000004";
+    s_read <= '1';
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    assert s_readdata = x"12345678"
+        report "ERROR: Read data mismatch! Expected 0x12345678, got " & to_hstring(s_readdata)
+        severity error;
+    report "Read data: " & to_hstring(s_readdata);
+    s_read <= '0';
+    wait for clk_period * 2;
+    
+    -- Test 5: Write to different block (will cause miss and eviction)
+    report "Test 5: Write data 0xCAFEBABE to address 0x0200 (different index)";
+    s_addr <= x"00000200";  -- Different index, will cause eviction
+    s_write <= '1';
+    s_writedata <= x"CAFEBABE";
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    s_write <= '0';
+    wait for clk_period * 5;  -- Allow time for write-back and read
+    
+    -- Test 6: Read from evicted address (should miss and load from memory)
+    report "Test 6: Read from address 0x0000 (expect cache miss)";
+    s_addr <= x"00000000";
+    s_read <= '1';
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    report "Read data: " & to_hstring(s_readdata);
+    s_read <= '0';
+    wait for clk_period * 2;
+    
+    report "All tests completed!";
+    wait;
+    
 end process;
 	
 end;
