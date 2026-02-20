@@ -7,6 +7,46 @@ end cache_tb;
 
 architecture behavior of cache_tb is
 
+-- Helper function to convert std_logic_vector to hex string
+function to_hex_string(slv: std_logic_vector) return string is
+    variable hexlen : integer := (slv'length + 3) / 4;
+    variable result : string(1 to hexlen);
+    variable nibble : std_logic_vector(3 downto 0);
+    variable idx : integer := 0;
+begin
+    for i in 0 to hexlen-1 loop
+        idx := slv'high - i*4;
+        if idx - 3 < slv'low then
+            -- Last nibble might be partial
+            nibble := (others => '0');
+            nibble(idx - slv'low downto 0) := slv(idx downto slv'low);
+        else
+            nibble := slv(idx downto idx-3);
+        end if;
+        
+        case nibble is
+            when "0000" => result(i+1) := '0';
+            when "0001" => result(i+1) := '1';
+            when "0010" => result(i+1) := '2';
+            when "0011" => result(i+1) := '3';
+            when "0100" => result(i+1) := '4';
+            when "0101" => result(i+1) := '5';
+            when "0110" => result(i+1) := '6';
+            when "0111" => result(i+1) := '7';
+            when "1000" => result(i+1) := '8';
+            when "1001" => result(i+1) := '9';
+            when "1010" => result(i+1) := 'A';
+            when "1011" => result(i+1) := 'B';
+            when "1100" => result(i+1) := 'C';
+            when "1101" => result(i+1) := 'D';
+            when "1110" => result(i+1) := 'E';
+            when "1111" => result(i+1) := 'F';
+            when others => result(i+1) := 'X';
+        end case;
+    end loop;
+    return result;
+end function;
+
 component cache is
 generic(
     ram_size : INTEGER := 32768
@@ -145,9 +185,9 @@ begin
     wait until s_waitrequest = '0';
     wait for clk_period;
     assert s_readdata = x"DEADBEEF" 
-        report "ERROR: Read data mismatch! Expected 0xDEADBEEF, got " & to_hstring(s_readdata)
+        report "ERROR: Read data mismatch! Expected 0xDEADBEEF, got 0x" & to_hex_string(s_readdata)
         severity error;
-    report "Read data: " & to_hstring(s_readdata);
+    report "Read data: 0x" & to_hex_string(s_readdata);
     s_read <= '0';
     wait for clk_period * 2;
     
@@ -168,9 +208,9 @@ begin
     wait until s_waitrequest = '0';
     wait for clk_period;
     assert s_readdata = x"12345678"
-        report "ERROR: Read data mismatch! Expected 0x12345678, got " & to_hstring(s_readdata)
+        report "ERROR: Read data mismatch! Expected 0x12345678, got 0x" & to_hex_string(s_readdata)
         severity error;
-    report "Read data: " & to_hstring(s_readdata);
+    report "Read data: 0x" & to_hex_string(s_readdata);
     s_read <= '0';
     wait for clk_period * 2;
     
@@ -190,7 +230,7 @@ begin
     s_read <= '1';
     wait until s_waitrequest = '0';
     wait for clk_period;
-    report "Read data: " & to_hstring(s_readdata);
+    report "Read data: 0x" & to_hex_string(s_readdata);
     s_read <= '0';
     wait for clk_period * 2;
     
