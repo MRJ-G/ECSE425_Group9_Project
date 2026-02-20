@@ -64,6 +64,14 @@ SIGNAL read_byte_count: INTEGER range 0 to block_size/8-1 := 0;
 SIGNAL write_data_buffer: STD_LOGIC_VECTOR(block_size-1 downto 0) := (OTHERS => '0');
 SIGNAL write_byte_count: INTEGER range 0 to block_size/8-1 := 0;
 
+-- Internal registers for outputs (initialized at declaration)
+SIGNAL s_readdata_reg : STD_LOGIC_VECTOR(31 downto 0) := (OTHERS => '0');
+SIGNAL m_writedata_reg : STD_LOGIC_VECTOR(7 downto 0) := (OTHERS => '0');
+SIGNAL m_addr_reg : INTEGER range 0 to ram_size-1 := 0;
+SIGNAL s_waitrequest_reg : STD_LOGIC := '1';
+SIGNAL m_read_reg : STD_LOGIC := '0';
+SIGNAL m_write_reg : STD_LOGIC := '0';
+
 --################# FSM signals #################--
 TYPE STATE_TYPE IS (IDLE, TAG, READ_MEM, WRITE_MEM, DONE);
 SIGNAL state: STATE_TYPE := IDLE;
@@ -140,7 +148,13 @@ SIGNAL need_write_back_signal: BOOLEAN := FALSE;
 
 begin
 
--- make circuits here
+	-- make circuits here
+	s_readdata <= s_readdata_reg;
+	m_writedata <= m_writedata_reg;
+	m_addr <= m_addr_reg;
+	s_waitrequest <= s_waitrequest_reg;
+	m_read <= m_read_reg;
+	m_write <= m_write_reg;
 
 	state_update: PROCESS (clock)
 		VARIABLE temp_block : CACHE_BLOCK;
@@ -152,14 +166,13 @@ begin
 			write_data_buffer <= (OTHERS => '0');
 			write_byte_count <= 0;
 			resolved_main_addr <= 0;
+			s_readdata_reg <= (OTHERS => '0');
+			m_writedata_reg <= (OTHERS => '0');
+			m_addr_reg <= 0;
+			s_waitrequest_reg <= '1';
+			m_read_reg <= '0';
+			m_write_reg <= '0';
 			state <= IDLE;
-			-- Reset outputs
-			s_waitrequest <= '1';
-			s_readdata <= (OTHERS => '0');
-			m_read <= '0';
-			m_write <= '0';
-			m_addr <= 0;
-			m_writedata <= (OTHERS => '0');
 		ELSIF rising_edge(clock) THEN
 			CASE state IS
 				WHEN IDLE =>
@@ -176,7 +189,7 @@ begin
 				------------------------------------------------------------
 					IF hit(cache_address) THEN
 						IF s_read = '1' THEN
-							s_readdata <= read_word(cache_address);
+							s_readdata_reg <= read_word(cache_address);
 						ELSIF s_write = '1' THEN
 							cache_array(cache_address.index) <= write_word(cache_address, s_writedata);
 						END IF;
@@ -199,8 +212,8 @@ begin
 						-- current write-one-byte-to-memory transaction has not been completed
 						state <= WRITE_MEM;
 					ELSIF m_waitrequest = '0' AND write_byte_count < block_size/8-1 THEN
-						m_addr <= resolved_main_addr + write_byte_count;
-						m_writedata <= write_data_buffer((write_byte_count+1)*8-1 downto write_byte_count*8);
+						m_addr_reg <= resolved_main_addr + write_byte_count;
+						m_writedata_reg <= write_data_buffer((write_byte_count+1)*8-1 downto write_byte_count*8);
 						write_byte_count <= write_byte_count + 1;
 						state <= WRITE_MEM;
 					ELSIF m_waitrequest = '0' AND write_byte_count = block_size/8-1 THEN
@@ -215,7 +228,7 @@ begin
 						state <= READ_MEM;
 					ELSIF m_waitrequest = '0' AND read_byte_count < block_size/8-1 THEN
 						read_data_buffer((read_byte_count+1)*8-1 downto read_byte_count*8) <= m_readdata;
-						m_addr <= resolved_main_addr + read_byte_count + 1;
+						m_addr_reg <= resolved_main_addr + read_byte_count + 1;
 						read_byte_count <= read_byte_count + 1;
 						state <= READ_MEM;
 					ELSIF m_waitrequest = '0' AND read_byte_count = block_size/8-1 THEN
@@ -245,29 +258,29 @@ begin
 	BEGIN
 		CASE state IS
 			WHEN IDLE =>
-				s_waitrequest <= '1';
-				m_read <= '0';
-				m_write <= '0';
+				s_waitrequest_reg <= '1';
+				m_read_reg <= '0';
+				m_write_reg <= '0';
 			WHEN TAG =>
-				s_waitrequest <= '1';
-				m_read <= '0';
-				m_write <= '0';
+				s_waitrequest_reg <= '1';
+				m_read_reg <= '0';
+				m_write_reg <= '0';
 			WHEN WRITE_MEM =>
-				s_waitrequest <= '1';
-				m_read <= '0';
-				m_write <= '1';
+				s_waitrequest_reg <= '1';
+				m_read_reg <= '0';
+				m_write_reg <= '1';
 			WHEN READ_MEM =>
-				s_waitrequest <= '1';
-				m_read <= '1';
-				m_write <= '0';
+				s_waitrequest_reg <= '1';
+				m_read_reg <= '1';
+				m_write_reg <= '0';
 			WHEN DONE =>
-				s_waitrequest <= '0';
-				m_read <= '0';
-				m_write <= '0';
+				s_waitrequest_reg <= '0';
+				m_read_reg <= '0';
+				m_write_reg <= '0';
 			WHEN OTHERS =>
-				s_waitrequest <= '1';
-				m_read <= '0';
-				m_write <= '0';
+				s_waitrequest_reg <= '1';
+				m_read_reg <= '0';
+				m_write_reg <= '0';
 		END CASE;
 	END PROCESS;
 
