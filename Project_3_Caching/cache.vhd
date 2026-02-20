@@ -68,9 +68,6 @@ SIGNAL write_byte_count: INTEGER range 0 to block_size/8-1 := 0;
 SIGNAL s_readdata_reg : STD_LOGIC_VECTOR(31 downto 0) := (OTHERS => '0');
 SIGNAL m_writedata_reg : STD_LOGIC_VECTOR(7 downto 0) := (OTHERS => '0');
 SIGNAL m_addr_reg : INTEGER range 0 to ram_size-1 := 0;
-SIGNAL s_waitrequest_reg : STD_LOGIC := '1';
-SIGNAL m_read_reg : STD_LOGIC := '0';
-SIGNAL m_write_reg : STD_LOGIC := '0';
 
 --################# FSM signals #################--
 TYPE STATE_TYPE IS (IDLE, TAG, READ_MEM, WRITE_MEM, DONE);
@@ -152,9 +149,6 @@ begin
 	s_readdata <= s_readdata_reg;
 	m_writedata <= m_writedata_reg;
 	m_addr <= m_addr_reg;
-	s_waitrequest <= s_waitrequest_reg;
-	m_read <= m_read_reg;
-	m_write <= m_write_reg;
 
 	state_update: PROCESS (clock)
 		VARIABLE temp_block : CACHE_BLOCK;
@@ -169,9 +163,6 @@ begin
 			s_readdata_reg <= (OTHERS => '0');
 			m_writedata_reg <= (OTHERS => '0');
 			m_addr_reg <= 0;
-			s_waitrequest_reg <= '1';
-			m_read_reg <= '0';
-			m_write_reg <= '0';
 			state <= IDLE;
 		ELSIF rising_edge(clock) THEN
 			CASE state IS
@@ -256,31 +247,22 @@ begin
 
 	output_logic: PROCESS (state)
 	BEGIN
+		s_waitrequest <= '1';
+		m_read <= '0';
+		m_write <= '0';
 		CASE state IS
 			WHEN IDLE =>
-				s_waitrequest_reg <= '1';
-				m_read_reg <= '0';
-				m_write_reg <= '0';
+				NULL;
 			WHEN TAG =>
-				s_waitrequest_reg <= '1';
-				m_read_reg <= '0';
-				m_write_reg <= '0';
+				NULL;
 			WHEN WRITE_MEM =>
-				s_waitrequest_reg <= '1';
-				m_read_reg <= '0';
-				m_write_reg <= '1';
+				m_write <= '1';
 			WHEN READ_MEM =>
-				s_waitrequest_reg <= '1';
-				m_read_reg <= '1';
-				m_write_reg <= '0';
+				m_read <= '1';
 			WHEN DONE =>
-				s_waitrequest_reg <= '0';
-				m_read_reg <= '0';
-				m_write_reg <= '0';
+				s_waitrequest <= '0';
 			WHEN OTHERS =>
-				s_waitrequest_reg <= '1';
-				m_read_reg <= '0';
-				m_write_reg <= '0';
+				NULL;
 		END CASE;
 	END PROCESS;
 
