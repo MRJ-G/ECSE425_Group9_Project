@@ -105,7 +105,7 @@ BEGIN
 RETURN need;
 END FUNCTION;
 
-IMPURE FUNCTION read_word(addr: ADDR) RETURN STD_LOGIC_VECTOR(31 downto 0) IS
+IMPURE FUNCTION read_word(addr: ADDR) RETURN STD_LOGIC_VECTOR IS
 	VARIABLE word_out: STD_LOGIC_VECTOR(31 downto 0);
 	VARIABLE byte_offset: INTEGER := addr.offset * 4; -- convert word offset to byte offset
 BEGIN
