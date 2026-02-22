@@ -237,7 +237,12 @@ begin
 						temp_block.dirty := '0';
 						temp_block.tag := cache_address.tag;
 						cache_array(cache_address.index) <= temp_block;
+						IF s_read = '1' THEN
+							s_readdata_reg <= read_word(cache_address);
+						ELSIF s_write = '1' THEN
+							cache_array(cache_address.index) <= write_word(cache_address, s_writedata);
 						state <= DONE;
+						END IF;
 					END IF;
 				WHEN READ_MEM_NEXT =>
 					-- Transition state: m_read = '0' here, will be '1' again in READ_MEM
