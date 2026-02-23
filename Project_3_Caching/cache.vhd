@@ -149,7 +149,6 @@ begin
 	s_readdata <= s_readdata_reg;
 	m_writedata <= m_writedata_reg;
 	m_addr <= m_addr_reg;
-
 	state_update: PROCESS (clock)
 		VARIABLE temp_block : CACHE_BLOCK;
 	BEGIN
@@ -233,16 +232,22 @@ begin
 						read_data_buffer((read_byte_count+1)*8-1 downto read_byte_count*8) <= m_readdata;
 						-- Update cache block with new data using temp_block
 						temp_block.data := read_data_buffer;
+
+						-- Check if it's read miss or write miss
+						if s_write = '1' then
+							
+    							temp_block.data((cache_address.offset+4)*8-1 downto cache_address.offset*8) := s_writedata;
+    							temp_block.dirty := '1';
+						else
+    							temp_block.dirty := '0';  -- read miss, block still matches memory
+						END IF;
+						
 						temp_block.valid := '1';
-						temp_block.dirty := '0';
 						temp_block.tag := cache_address.tag;
 						cache_array(cache_address.index) <= temp_block;
-						IF s_read = '1' THEN
-							s_readdata_reg <= read_word(cache_address);
-						ELSIF s_write = '1' THEN
-							cache_array(cache_address.index) <= write_word(cache_address, s_writedata);
+						--added
+						s_readdata_reg <= read_word(cache_address);
 						state <= DONE;
-						END IF;
 					END IF;
 				WHEN READ_MEM_NEXT =>
 					-- Transition state: m_read = '0' here, will be '1' again in READ_MEM
