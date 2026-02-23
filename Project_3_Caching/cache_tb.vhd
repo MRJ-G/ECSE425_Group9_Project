@@ -108,6 +108,8 @@ signal m_write : std_logic;
 signal m_writedata : std_logic_vector (7 downto 0);
 signal m_waitrequest : std_logic;
 
+signal temp : std_logic_vector (31 downto 0);
+
 begin
 
 -- Connect the components which we instantiated above to their
@@ -120,7 +122,7 @@ port map(
     s_addr => s_addr,
     s_read => s_read,
     s_readdata => s_readdata,
-    s_write => s_write,
+    s_write => s_write,    
     s_writedata => s_writedata,
     s_waitrequest => s_waitrequest,
 
@@ -152,7 +154,9 @@ begin
   wait for clk_period/2;
 end process;
 
+
 test_process : process
+
 begin
     -- Initialize signals
     s_read <= '0';
@@ -167,7 +171,7 @@ begin
     wait for clk_period;
     
     report "Starting cache tests...";
-    
+
     -- Test 1: Write to cache (address 0x0000)
     report "Test 1: Write data 0xDEADBEEF to address 0x0000";
     s_addr <= x"00000000";
@@ -190,6 +194,20 @@ begin
     report "Read data: 0x" & to_hex_string(s_readdata);
     s_read <= '0';
     wait for clk_period * 2;
+
+    -- Test 2b: Read the same block, but different word
+    report "Test 2b: Read the same block, but different word";
+    s_addr <= x"00000004";
+    s_read <= '1';
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    assert s_readdata = x"07060504" 
+        report "ERROR: Read data mismatch! Expected 0xDEADBEEF, got 0x" & to_hex_string(s_readdata)
+        severity error;
+    report "Read data: 0x" & to_hex_string(s_readdata);
+    s_read <= '0';
+    wait for clk_period * 2;
+    
     
     -- Test 3: Write to another address in same block
     report "Test 3: Write data 0x12345678 to address 0x0004";
@@ -224,18 +242,123 @@ begin
     s_write <= '0';
     wait for clk_period * 5;  -- Allow time for write-back and read
     
-    -- Test 6: Read from evicted address (should miss and load from memory)
-    report "Test 6: Read from address 0x0000 (expect cache miss)";
+ 
+    -- Test if the original data is written to the mem at tag = 0
+    report "Test 6: Read tag=0, load the data in mem at tag=0 check if it's previous data";
     s_addr <= x"00000000";
     s_read <= '1';
     wait until s_waitrequest = '0';
     wait for clk_period;
+    assert s_readdata = x"DEADBEEF" 
+        report "ERROR: Read data mismatch! Expected 0xDEADBEEF, got 0x" & to_hex_string(s_readdata)
+        severity error;
+    report "Read data: 0x" & to_hex_string(s_readdata);
+    s_read <= '0';
+    wait for clk_period * 2;  
+
+    -- Test 7: Read a empty line  {valid=0, dirty=0, read, miss}
+    report "Test 7: Read a empty line (should miss)";   
+    s_addr <= x"00000100";
+    s_read <= '1';	
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    s_read <= '0';
+    temp <= s_readdata;
+
+    wait for clk_period * 2;
+
+    -- Test 8: Read from new address (should hit, same block)
+    report "Test 8: Read from same address (expect cache hit)";
+    s_addr <= x"00000100";
+    s_read <= '1';
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    assert s_readdata = temp
+        report "ERROR: Read data mismatch! Expected the same"
+        severity error;
     report "Read data: 0x" & to_hex_string(s_readdata);
     s_read <= '0';
     wait for clk_period * 2;
-    
+
+    -- Test 9: Read miss with clean block(read a clean block with different tag)
+    report "Test 9: Read miss with clean block" ;
+    s_addr <= x"00000300";
+    s_read <= '1';  
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    assert s_readdata = x"03020100"
+        report "ERROR: Read data mismatch! Expected the same"
+        severity error;
+    report "Read data: 0x" & to_hex_string(s_readdata);
+    s_read <= '0';
+    wait for clk_period * 2;
+
+    -- Test 10: Simultaneous set s_read and s_write(read should go first based on our design)
+    report "Test 10: Simultaneous set s_read and s_write" ;
+    s_addr <= x"00000300";
+    s_read <= '1'; 
+    s_write <='1';
+    s_writedata <=x"DEADBEEF"; --should be ignored
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    assert s_readdata = x"03020100"
+        report "ERROR: Read data mismatch! Expected the same"
+        severity error;
+    report "Read data: 0x" & to_hex_string(s_readdata);
+    s_read <= '0';
+    s_write <= '0';
+    wait for clk_period * 2;
+
+    --Test 11: During read set s_write to 1(Read should continue finishing its job)
+    report "Test 11: During read set s_write to 1" ;
+    s_addr <= x"00000300";
+    s_read <= '1'; 
+
+    wait for 2*clk_period;
+    s_write <='1';
+    s_writedata <=x"DEADBEEF"; --should be ignored
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    assert s_readdata = x"03020100"
+        report "ERROR: Read data mismatch! Expected the same"
+        severity error;
+    report "Read data: 0x" & to_hex_string(s_readdata);
+    s_read <= '0';
+
+    --Test if the write is still going to work if we not set it down
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    s_write <='0';
+    s_addr <= x"00000300";
+    s_read <= '1'; 
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+
+    assert s_readdata = x"DEADBEEF"
+        report "ERROR: Read data mismatch! Expected the same"
+        severity error;
+    report "Read data: 0x" & to_hex_string(s_readdata);
+    s_read <= '0';
+    wait for clk_period * 2;
+
+    --Test 12: Reset Test
+    report "Test 12: Reset Test";
+    reset <= '1';
+    wait for clk_period;
+    s_addr <= x"00000300"; --(Original DEADBEEF from last test)
+    s_read <= '1'; 
+    wait until s_waitrequest = '0';
+    wait for clk_period;
+    assert s_readdata = x"03020100"
+        report "ERROR: Cache should be clear and we read from mem"
+        severity error;
+    report "Read data: 0x" & to_hex_string(s_readdata);
+    s_read <= '0';
+
     report "All tests completed!";
     wait;
+
+
     
 end process;
 	
