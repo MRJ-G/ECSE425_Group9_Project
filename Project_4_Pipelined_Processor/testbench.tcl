@@ -46,6 +46,19 @@ vcom -2008 register_file.vhd
 vcom -2008 processor.vhd
 vcom -2008 testbench.vhd
 
+# The VHDL testbench reads program.txt from the simulation working directory.
+# Keep that file in sync with the currently selected sample program so the
+# processor is not accidentally driven by a stale image from a previous run.
+set script_dir [file dirname [file normalize [info script]]]
+set program_source [file join $script_dir no_hazard_examples branch_no_hazard.txt]
+set program_target [file join $script_dir program.txt]
+file copy -force $program_source $program_target
+puts "==> Program image: $program_source -> $program_target"
+
+# Force the simulator working directory to the project directory so the VHDL
+# file_open("program.txt") call resolves to the expected file.
+cd $script_dir
+
 # Remove stale outputs to avoid confusion.
 safe_delete_output memory.txt
 safe_delete_output register_file.txt

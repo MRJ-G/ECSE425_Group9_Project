@@ -30,6 +30,7 @@ architecture rtl of processor is
     -- PC
     signal pc      : std_logic_vector(31 downto 0) := (others => '0');
     signal pc_next : std_logic_vector(31 downto 0);
+    signal fetch_pc : std_logic_vector(31 downto 0) := (others => '0');
 
     -- Hazard / flush
     signal stall       : std_logic := '0';
@@ -174,7 +175,9 @@ begin
         if rising_edge(clk) then
             if reset = '1' then
                 pc <= (others => '0');
+                fetch_pc <= (others => '0');
             elsif stall = '0' then
+                fetch_pc <= pc;
                 pc <= pc_next;
             end if; -- if stall = '1', hold the PC (don't fetch a new instruction)
         end if;
@@ -191,8 +194,8 @@ begin
                 if_id <= IF_ID_ZERO;
             elsif stall = '0' then
                 if_id.IR  <= imem_readdata;
-                if_id.PC  <= pc;
-                if_id.NPC <= std_logic_vector(unsigned(pc) + 4);
+                if_id.PC  <= fetch_pc;
+                if_id.NPC <= std_logic_vector(unsigned(fetch_pc) + 4);
             end if;
         end if;
     end process;
