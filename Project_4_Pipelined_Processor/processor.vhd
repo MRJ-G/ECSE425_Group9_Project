@@ -15,7 +15,7 @@ entity processor is
         dmem_dump_addr : in  integer range 0 to 8191;
         dmem_dump_data : out std_logic_vector(31 downto 0);
         -- Testbench: dump register file
-        reg_dump : out std_logic_vector(32*32-1 downto 0)
+        reg_dump : out std_logic_vector(32*32-1 downto 0) -- 32 registers * 32 bits
     );
 end entity processor;
 
@@ -35,7 +35,7 @@ architecture rtl of processor is
     signal stall       : std_logic := '0';
     signal branch_taken: std_logic;
 
-    -- Decode stage wires
+    -- Decode stage wires, updated by control and imm_gen
     signal ctrl_RegWrite : std_logic;
     signal ctrl_MemRead  : std_logic;
     signal ctrl_MemWrite : std_logic;
@@ -74,9 +74,9 @@ architecture rtl of processor is
 
 begin
 
-    ================================================================
+    -- ================================================================
     --  MEMORY INSTANTIATION
-    ================================================================
+    -- ================================================================
 
     -- Instruction memory (1024 words)
     imem_real_addr <= imem_load_addr when imem_load_en = '1'
@@ -93,10 +93,11 @@ begin
             readdata  => imem_readdata
         );
 
-    -- Data memory (8192 words = 32768 bytes)
-    dmem_real_addr <= dmem_dump_addr when (dmem_write_en = '0' and ex_mem.MemRead = '0')
+    -- allow testbench to read any address when not actively reading/writing in MEM stage
+    dmem_real_addr <= dmem_dump_addr when (dmem_write_en = '0' and ex_mem.MemRead = '0') 
                       else dmem_addr;
 
+    -- Data memory (8192 words = 32768 bytes)
     u_dmem: entity work.memory
         generic map(ram_size => 8192)
         port map(
@@ -110,9 +111,9 @@ begin
 
     dmem_dump_data <= dmem_readdata;
 
-    ================================================================
-    --  COMPONENT INSTANTIATION
-    ================================================================
+    -- ================================================================
+    --      COMPONENT INSTANTIATION
+    -- ================================================================
 
     u_control: entity work.control
         port map(
@@ -156,13 +157,13 @@ begin
             result => alu_result
         );
 
-    ================================================================
+    -- ================================================================
     --  STAGE 1: INSTRUCTION FETCH
-    ================================================================
+    -- ================================================================
 
     imem_addr <= to_integer(unsigned(pc(11 downto 2)));
-
-    branch_taken <= (ex_mem.Branch and ex_mem.Cond) or ex_mem.Jump;
+    
+    branch_taken <= (ex_mem.Branch and ex_mem.Cond) or ex_mem.Jump; 
 
     pc_next <= ex_mem.BrTarget when branch_taken = '1'
                else std_logic_vector(unsigned(pc) + 4);
@@ -174,13 +175,13 @@ begin
                 pc <= (others => '0');
             elsif stall = '0' then
                 pc <= pc_next;
-            end if;
+            end if; -- if stall = '1', hold the PC (don't fetch a new instruction)
         end if;
     end process;
 
-    ================================================================
+    -- ================================================================
     --  IF/ID PIPELINE REGISTER
-    ================================================================
+    -- ================================================================
 
     process(clk)
     begin
@@ -195,15 +196,23 @@ begin
         end if;
     end process;
 
-    ================================================================
-    --  ID/EX PIPELINE REGISTER
-    ================================================================
+    -- ================================================================
+    --  STAGE 2: INSTRUCTION DECODE
+    -- ================================================================
 
+    -- Decode stage: control unit+immediate generator+register file read (all init above)
+        -- Control: generate control signals based on opcode/funct3/funct7
+        -- Immediate generator: generate immediate based on instruction format
+        -- Register file: read rs1/rs2
+
+    -- ================================================================
+    --  ID/EX PIPELINE REGISTER
+    -- ================================================================
     process(clk)
     begin
         if rising_edge(clk) then
             if reset = '1' or branch_taken = '1' or stall = '1' then
-                id_ex <= ID_EX_ZERO;
+                id_ex <= ID_EX_ZERO; -- reset or no-op
             else
                 id_ex.IR       <= if_id.IR;
                 id_ex.PC       <= if_id.PC;
@@ -225,41 +234,48 @@ begin
         end if;
     end process;
 
-    ================================================================
+    -- ================================================================
     --  STAGE 3: EXECUTE
-    ================================================================
-
+    -- ================================================================
+    
     alu_a <= id_ex.PC when id_ex.ALUOp = ALU_AUIPC
-             else id_ex.A;
+             else id_ex.A; -- only auipc uses the PC as ALU input A, otherwise use the register value
 
     alu_b <= id_ex.Imm when id_ex.ALUSrc = '1'
              else id_ex.B;
 
+    -- JALR: PC = A + imm (alu_result)
+    -- Other: PC = PC + imm (dedicated adder in EX, not ALU)
     br_target <= alu_result when id_ex.IsJALR = '1'
                  else std_logic_vector(unsigned(id_ex.PC) + unsigned(id_ex.Imm));
 
+    ------------------------------------------------------------------------------
+    -- alu_result is computed in the ALU module (in component instantiation above)
+    ------------------------------------------------------------------------------
+
+    -- BR COND resolution using dedicated circuit in EX stage (not ALU)
     process(id_ex)
         variable sa, sb : signed(31 downto 0);
         variable ua, ub : unsigned(31 downto 0);
     begin
         sa := signed(id_ex.A);
         sb := signed(id_ex.B);
-        ua := unsigned(id_ex.A);
-        ub := unsigned(id_ex.B);
+        ua := unsigned(id_ex.A); -- not required
+        ub := unsigned(id_ex.B); -- not required
         case id_ex.BrType is
             when BR_BEQ  => br_cond <= '1' when id_ex.A = id_ex.B   else '0';
             when BR_BNE  => br_cond <= '1' when id_ex.A /= id_ex.B  else '0';
             when BR_BLT  => br_cond <= '1' when sa < sb             else '0';
             when BR_BGE  => br_cond <= '1' when sa >= sb            else '0';
-            when BR_BLTU => br_cond <= '1' when ua < ub             else '0';
-            when BR_BGEU => br_cond <= '1' when ua >= ub            else '0';
+            when BR_BLTU => br_cond <= '1' when ua < ub             else '0'; -- not required
+            when BR_BGEU => br_cond <= '1' when ua >= ub            else '0'; -- not required
             when others  => br_cond <= '0';
         end case;
     end process;
 
-    ================================================================
+    -- ================================================================
     --  EX/MEM PIPELINE REGISTER
-    ================================================================
+    -- ================================================================
 
     process(clk)
     begin
@@ -283,9 +299,9 @@ begin
         end if;
     end process;
 
-    ================================================================
+    -- ================================================================
     --  STAGE 4: MEMORY
-    ================================================================
+    -- ================================================================
 
     -- Word address = byte address / 4
     dmem_addr    <= to_integer(unsigned(ex_mem.ALUOutput(14 downto 2)));
@@ -294,9 +310,9 @@ begin
     -- lw: just pass the full word through
     -- sw: ex_mem.B is connected directly to memory writedata above
 
-    ================================================================
+    -- ================================================================
     --  MEM/WB PIPELINE REGISTER
-    ================================================================
+    -- ================================================================
 
     process(clk)
     begin
@@ -314,9 +330,9 @@ begin
         end if;
     end process;
 
-    ================================================================
+    -- ================================================================
     --  STAGE 5: WRITE BACK
-    ================================================================
+    -- ================================================================
 
     wb_rd_addr <= get_rd(mem_wb.IR);
 
@@ -324,9 +340,9 @@ begin
                   else mem_wb.NPC  when mem_wb.MemToReg = WB_PC4
                   else mem_wb.ALUOutput;
 
-    ================================================================
+    -- ================================================================
     --  HAZARD DETECTION (placeholder)
-    ================================================================
+    -- ================================================================
     -- Uncomment to enable:
     -- stall <= '1' when
     --   (id_ex.RegWrite='1' and get_rd(id_ex.IR)/="00000" and

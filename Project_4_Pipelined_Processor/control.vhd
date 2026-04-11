@@ -9,10 +9,10 @@ entity control is
         RegWrite : out std_logic;
         MemRead  : out std_logic;
         MemWrite : out std_logic;
-        ALUSrc   : out std_logic;
-        ALUOp    : out std_logic_vector(3 downto 0);
-        MemToReg : out std_logic_vector(1 downto 0);
-        Branch   : out std_logic;
+        ALUSrc   : out std_logic; -- 0 = reg, 1 = imm
+        ALUOp    : out std_logic_vector(3 downto 0); -- defined in pipeline_types.vhd
+        MemToReg : out std_logic_vector(1 downto 0); -- 00 = ALU, 01 = MEM, 10 = NPC(PC+4)
+        Branch   : out std_logic; -- 1: branch instruction (beq/bne/blt/bge)
         BrType   : out std_logic_vector(2 downto 0);
         Jump     : out std_logic;
         IsJALR   : out std_logic
@@ -43,15 +43,15 @@ begin
                 case funct3 is
                     when "000" =>
                         if funct7 = "0000001" then ALUOp <= ALU_MUL;
-                        elsif funct7(5) = '1'  then ALUOp <= ALU_SUB;
-                        else                        ALUOp <= ALU_ADD;
+                        elsif funct7(5) = '1' then ALUOp <= ALU_SUB; -- funct7 = 0x20
+                        else                       ALUOp <= ALU_ADD; -- funct7 = 0x00
                         end if;
                     when "001" => ALUOp <= ALU_SLL;
-                    when "010" => ALUOp <= ALU_SLT;
-                    when "011" => ALUOp <= ALU_SLTU;
-                    when "100" => ALUOp <= ALU_XOR;
+                    when "010" => ALUOp <= ALU_SLT; -- not required
+                    when "011" => ALUOp <= ALU_SLTU; -- not required
+                    when "100" => ALUOp <= ALU_XOR; -- not required
                     when "101" =>
-                        if funct7(5) = '1' then ALUOp <= ALU_SRA;
+                        if funct7(5) = '1' then ALUOp <= ALU_SRA; -- funct7 = 0x20
                         else                    ALUOp <= ALU_SRL;
                         end if;
                     when "110" => ALUOp <= ALU_OR;
@@ -62,16 +62,16 @@ begin
             -- I-type ALU: addi, xori, ori, andi, slti, sltiu, slli, srli, srai
             when OP_ITYPE =>
                 RegWrite <= '1';
-                ALUSrc   <= '1';
+                ALUSrc   <= '1'; -- use immediate
                 case funct3 is
                     when "000" => ALUOp <= ALU_ADD;
-                    when "001" => ALUOp <= ALU_SLL;
+                    when "001" => ALUOp <= ALU_SLL; -- not required
                     when "010" => ALUOp <= ALU_SLT;
-                    when "011" => ALUOp <= ALU_SLTU;
+                    when "011" => ALUOp <= ALU_SLTU; -- not required
                     when "100" => ALUOp <= ALU_XOR;
                     when "101" =>
-                        if funct7(5) = '1' then ALUOp <= ALU_SRA;
-                        else                    ALUOp <= ALU_SRL;
+                        if funct7(5) = '1' then ALUOp <= ALU_SRA; -- not required
+                        else                    ALUOp <= ALU_SRL; -- not required
                         end if;
                     when "110" => ALUOp <= ALU_OR;
                     when "111" => ALUOp <= ALU_AND;
@@ -100,8 +100,8 @@ begin
                     when "001" => BrType <= BR_BNE;
                     when "100" => BrType <= BR_BLT;
                     when "101" => BrType <= BR_BGE;
-                    when "110" => BrType <= BR_BLTU;
-                    when "111" => BrType <= BR_BGEU;
+                    when "110" => BrType <= BR_BLTU; -- not required
+                    when "111" => BrType <= BR_BGEU; -- not required
                     when others => null;
                 end case;
 
@@ -109,7 +109,7 @@ begin
             when OP_JAL =>
                 RegWrite <= '1';
                 Jump     <= '1';
-                MemToReg <= WB_PC4;
+                MemToReg <= WB_PC4; -- rd = PC + 4
 
             -- JALR
             when OP_JALR =>

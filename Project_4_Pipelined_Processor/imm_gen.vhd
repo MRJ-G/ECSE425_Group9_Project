@@ -20,7 +20,7 @@ begin
         case opcode is
             -- I-type: addi, xori, ori, andi, slti, sltiu, load, jalr
             when OP_ITYPE | OP_LOAD | OP_JALR =>
-                imm <= (31 downto 12 => ir(31)) & ir(31 downto 20);
+                imm <= (31 downto 12 => ir(31)) & ir(31 downto 20); -- sign-extend bits 31:20
 
             -- S-type: sb, sh, sw
             when OP_STORE =>
@@ -34,9 +34,10 @@ begin
 
             -- U-type: lui, auipc
             when OP_LUI | OP_AUIPC =>
-                imm <= ir(31 downto 12) & x"000";
+                imm <= ir(31 downto 12) & x"000"; -- imm = imm << 12
 
             -- J-type: jal
+            -- same as branch (bit 0 = 0 implicit)
             when OP_JAL =>
                 imm <= (31 downto 21 => ir(31))
                        & ir(31) & ir(19 downto 12) & ir(20) & ir(30 downto 21) & '0';

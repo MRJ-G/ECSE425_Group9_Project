@@ -22,7 +22,7 @@ begin
     ub <= unsigned(b);
 
     process(a, b, op, sa, sb, ua, ub)
-        variable shamt : natural;
+        variable shamt : natural; -- shift amount for shift operations (from imm[4:0])
     begin
         shamt := to_integer(unsigned(b(4 downto 0)));
         case op is
