@@ -107,8 +107,6 @@ begin
 
         variable in_line : line;
         variable out_line : line;
-        variable program_line : string(1 to 256);
-        variable program_len : natural;
         variable instr_count : integer := 0;
         variable reg_word : std_logic_vector(31 downto 0);
     begin
@@ -125,22 +123,17 @@ begin
             if in_line'length = 0 then
                 next;
             end if;
-            -- convert in_line to a string variable program_line, and get its length in program_len
-            read(in_line, program_line, program_len);
-            if program_len = 0 then
-                next;
-            end if;
 
             assert instr_count <= 1023
                 report "Program too large: more than 1024 instructions"
                 severity failure;
 
-            assert is_valid_instr(program_line(1 to program_len))
+            assert is_valid_instr(in_line.all)
                 report "Invalid instruction in program.txt at index " & integer'image(instr_count)
                 severity failure;
 
             imem_load_addr <= instr_count;
-            imem_load_data <= bin_string_to_slv32(program_line(1 to program_len));
+            imem_load_data <= bin_string_to_slv32(in_line.all);
             imem_load_en <= '1';
             wait until rising_edge(clk);
             instr_count := instr_count + 1;
