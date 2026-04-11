@@ -68,6 +68,32 @@ catch {add wave -position end -radix binary sim:/testbench/imem_load_data}
 catch {add wave -position end -radix unsigned sim:/testbench/dmem_dump_addr}
 catch {add wave -position end -radix binary sim:/testbench/dmem_dump_data}
 
+# Branch debug waves (decode -> execute -> redirect).
+catch {add wave -position end -radix hex sim:/testbench/uut/pc}
+catch {add wave -position end -radix hex sim:/testbench/uut/pc_next}
+catch {add wave -position end sim:/testbench/uut/branch_taken}
+
+catch {add wave -position end -radix hex sim:/testbench/uut/if_id/IR}
+catch {add wave -position end -radix hex sim:/testbench/uut/id_ex/IR}
+catch {add wave -position end -radix hex sim:/testbench/uut/ex_mem/IR}
+
+catch {add wave -position end sim:/testbench/uut/ctrl_Branch}
+catch {add wave -position end -radix binary sim:/testbench/uut/ctrl_BrType}
+catch {add wave -position end sim:/testbench/uut/id_ex/Branch}
+catch {add wave -position end -radix binary sim:/testbench/uut/id_ex/BrType}
+catch {add wave -position end sim:/testbench/uut/ex_mem/Branch}
+catch {add wave -position end sim:/testbench/uut/ex_mem/Cond}
+
+catch {add wave -position end -radix hex sim:/testbench/uut/id_ex/A}
+catch {add wave -position end -radix hex sim:/testbench/uut/id_ex/B}
+catch {add wave -position end -radix hex sim:/testbench/uut/id_ex/Imm}
+catch {add wave -position end -radix hex sim:/testbench/uut/br_target}
+catch {add wave -position end sim:/testbench/uut/br_cond}
+
+# Optional internal control decode visibility.
+catch {add wave -position end -radix binary sim:/testbench/uut/u_control/opcode}
+catch {add wave -position end -radix binary sim:/testbench/uut/u_control/funct3}
+
 puts "==> Running fixed simulation length: $run_cycles cycles (${run_time_ns} ns)"
 run ${run_time_ns} ns
 

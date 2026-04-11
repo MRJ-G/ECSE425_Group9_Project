@@ -166,25 +166,45 @@ begin
         dmem_dump_addr <= 0;
         wait until rising_edge(clk);
 
-        -- Fixed expected results for arith_mem_no_hazard program.
+        -- Fixed expected results for branch_no_hazard program.
+        -- Program intent:
+        --   addi x1, x0, 3
+        --   addi x2, x0, 3
+        --   beq  x1, x2, target   (taken)
+        --   addi x5, x0, 99       (must be skipped)
+        -- target:
+        --   addi x6, x0, 42
         assert get_reg_word(reg_dump, 0) = std_logic_vector(to_unsigned(0, 32)) severity error;
-        assert get_reg_word(reg_dump, 1) = std_logic_vector(to_unsigned(5, 32)) severity error;
-        assert get_reg_word(reg_dump, 2) = std_logic_vector(to_unsigned(7, 32)) severity error;
-        assert get_reg_word(reg_dump, 3) = std_logic_vector(to_unsigned(12, 32)) severity error;
-        assert get_reg_word(reg_dump, 4) = std_logic_vector(to_unsigned(12, 32)) severity error;
-        for i in 5 to 31 loop
-            assert get_reg_word(reg_dump, i) = std_logic_vector(to_unsigned(0, 32))
-                report "arith_mem_no_hazard: expected x" & integer'image(i) & " = 0"
-                severity error;
-        end loop;
-        assert get_mem_dump_word(dmem_dump_data, 0) = std_logic_vector(to_unsigned(12, 32))
-            report "arith_mem_no_hazard: expected memory[0] = 12"
+        assert get_reg_word(reg_dump, 1) = std_logic_vector(to_unsigned(3, 32)) severity error;
+        assert get_reg_word(reg_dump, 2) = std_logic_vector(to_unsigned(3, 32)) severity error;
+        assert get_reg_word(reg_dump, 5) = std_logic_vector(to_unsigned(0, 32))
+            report "branch_no_hazard: expected x5 = 0 (instruction after beq should be skipped)"
             severity error;
-        assert get_mem_dump_word(dmem_dump_data, 1) = std_logic_vector(to_unsigned(0, 32))
-            report "arith_mem_no_hazard: expected memory[1] = 0"
+        assert get_reg_word(reg_dump, 6) = std_logic_vector(to_unsigned(42, 32))
+            report "branch_no_hazard: expected x6 = 42 at branch target"
             severity error;
 
-        report "Assertions passed for fixed program: arith_mem_no_hazard"
+        -- x3, x4, x7..x31 should remain zero in this program.
+        for i in 3 to 4 loop
+            assert get_reg_word(reg_dump, i) = std_logic_vector(to_unsigned(0, 32))
+                report "branch_no_hazard: expected x" & integer'image(i) & " = 0"
+                severity error;
+        end loop;
+        for i in 7 to 31 loop
+            assert get_reg_word(reg_dump, i) = std_logic_vector(to_unsigned(0, 32))
+                report "branch_no_hazard: expected x" & integer'image(i) & " = 0"
+                severity error;
+        end loop;
+
+        -- No stores in branch_no_hazard, so memory should stay at zero.
+        assert get_mem_dump_word(dmem_dump_data, 0) = std_logic_vector(to_unsigned(0, 32))
+            report "branch_no_hazard: expected memory[0] = 0"
+            severity error;
+        assert get_mem_dump_word(dmem_dump_data, 1) = std_logic_vector(to_unsigned(0, 32))
+            report "branch_no_hazard: expected memory[1] = 0"
+            severity error;
+
+        report "Assertions passed for fixed program: branch_no_hazard"
             severity note;
 
         -- Hold core in reset so memory dump address is selected by dmem_dump_addr.
