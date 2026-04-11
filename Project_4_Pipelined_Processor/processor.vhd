@@ -11,9 +11,9 @@ entity processor is
         imem_load_addr : in  integer range 0 to 1023;
         imem_load_data : in  std_logic_vector(31 downto 0);
         imem_load_en   : in  std_logic;
-        -- Testbench: dump data memory (word-indexed, 0..8191)
+        -- Testbench: dump data memory block (base word index, 0..8191)
         dmem_dump_addr : in  integer range 0 to 8191;
-        dmem_dump_data : out std_logic_vector(31 downto 0);
+        dmem_dump_data : out std_logic_vector(32*32-1 downto 0);
         -- Testbench: dump register file
         reg_dump : out std_logic_vector(32*32-1 downto 0) -- 32 registers * 32 bits
     );
@@ -70,7 +70,7 @@ architecture rtl of processor is
     signal dmem_addr      : integer range 0 to 8191;
     signal dmem_readdata  : std_logic_vector(31 downto 0);
     signal dmem_write_en  : std_logic;
-    signal dmem_real_addr : integer range 0 to 8191;
+    signal dmem_dump_bus  : std_logic_vector(32*32-1 downto 0);
 
 begin
 
@@ -90,12 +90,10 @@ begin
             address   => imem_real_addr,
             memwrite  => imem_load_en,
             memread   => '1',
-            readdata  => imem_readdata
+            readdata  => imem_readdata,
+            dump_base_addr => 0,
+            dump_out       => open
         );
-
-    -- allow testbench to read any address when not actively reading/writing in MEM stage
-    dmem_real_addr <= dmem_dump_addr when (dmem_write_en = '0' and ex_mem.MemRead = '0') 
-                      else dmem_addr;
 
     -- Data memory (8192 words = 32768 bytes)
     u_dmem: entity work.memory
@@ -103,13 +101,15 @@ begin
         port map(
             clock     => clk,
             writedata => ex_mem.B,
-            address   => dmem_real_addr,
+            address   => dmem_addr,
             memwrite  => dmem_write_en,
             memread   => '1',
-            readdata  => dmem_readdata
+            readdata  => dmem_readdata,
+            dump_base_addr => dmem_dump_addr,
+            dump_out       => dmem_dump_bus
         );
 
-    dmem_dump_data <= dmem_readdata;
+    dmem_dump_data <= dmem_dump_bus;
 
     -- ================================================================
     --      COMPONENT INSTANTIATION

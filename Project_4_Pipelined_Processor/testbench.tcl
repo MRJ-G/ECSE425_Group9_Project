@@ -16,6 +16,20 @@ onerror {
     }
 }
 
+proc safe_delete_output {path} {
+    if {![file exists $path]} {
+        return
+    }
+
+    # Try to ensure the file is writable before deleting.
+    catch {file attributes $path -permissions u+w}
+
+    if {[catch {file delete -force $path} err]} {
+        puts "WARNING: Could not delete $path ($err)."
+        puts "         The simulation will continue and may overwrite this file."
+    }
+}
+
 puts "==> Preparing work library"
 if {![file exists work]} {
     vlib work
@@ -33,18 +47,16 @@ vcom -2008 processor.vhd
 vcom -2008 testbench.vhd
 
 # Remove stale outputs to avoid confusion.
-if {[file exists memory.txt]} {
-    file delete -force memory.txt
-}
-if {[file exists register_file.txt]} {
-    file delete -force register_file.txt
-}
+safe_delete_output memory.txt
+safe_delete_output register_file.txt
 
 puts "==> Starting simulation: work.testbench"
 vsim -voptargs=+acc work.testbench
 
-# testbench.vhd uses CLK_PERIOD = 1 ns, so 10000 cycles = 10000 ns.
-set run_cycles 10000
+# testbench.vhd uses CLK_PERIOD = 1 ns.
+# Need enough cycles for: program load + RUN_CYCLES (2500) + memory dump blocks (256) + register dump.
+# Keep a safe margin for longer programs.
+set run_cycles 6000
 set run_time_ns $run_cycles
 
 # Optional waves when running in GUI mode; ignored in batch mode.

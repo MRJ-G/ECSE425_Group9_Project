@@ -18,7 +18,7 @@ architecture sim of testbench is
     signal imem_load_en   : std_logic := '0';
 
     signal dmem_dump_addr : integer range 0 to 8191 := 0;
-    signal dmem_dump_data : std_logic_vector(31 downto 0);
+    signal dmem_dump_data : std_logic_vector(32*32-1 downto 0);
 
     signal reg_dump : std_logic_vector(32*32-1 downto 0);
 
@@ -74,6 +74,16 @@ architecture sim of testbench is
         variable w : std_logic_vector(31 downto 0);
     begin
         w := regs(32*(idx+1)-1 downto 32*idx);
+        return w;
+    end function;
+
+    function get_mem_dump_word(
+        mem_dump : std_logic_vector(32*32-1 downto 0);
+        idx      : natural
+    ) return std_logic_vector is
+        variable w : std_logic_vector(31 downto 0);
+    begin
+        w := mem_dump(32*(idx+1)-1 downto 32*idx);
         return w;
     end function;
 
@@ -167,8 +177,11 @@ begin
                 report "arith_mem_no_hazard: expected x" & integer'image(i) & " = 0"
                 severity error;
         end loop;
-        assert dmem_dump_data = std_logic_vector(to_unsigned(12, 32))
+        assert get_mem_dump_word(dmem_dump_data, 0) = std_logic_vector(to_unsigned(12, 32))
             report "arith_mem_no_hazard: expected memory[0] = 12"
+            severity error;
+        assert get_mem_dump_word(dmem_dump_data, 1) = std_logic_vector(to_unsigned(0, 32))
+            report "arith_mem_no_hazard: expected memory[1] = 0"
             severity error;
 
         report "Assertions passed for fixed program: arith_mem_no_hazard"
@@ -180,11 +193,13 @@ begin
         wait until rising_edge(clk);
 
         file_open(mem_file, "memory.txt", write_mode);
-        for i in 0 to 8191 loop
-            dmem_dump_addr <= i;
+        for blk in 0 to 255 loop
+            dmem_dump_addr <= blk * 32;
             wait until rising_edge(clk);
-            write(out_line, slv_to_bin_string(dmem_dump_data));
-            writeline(mem_file, out_line);
+            for j in 0 to 31 loop
+                write(out_line, slv_to_bin_string(get_mem_dump_word(dmem_dump_data, j)));
+                writeline(mem_file, out_line);
+            end loop;
         end loop;
         file_close(mem_file);
 
