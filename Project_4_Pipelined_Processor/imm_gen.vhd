@@ -27,20 +27,22 @@ begin
                 imm <= (31 downto 12 => ir(31)) & ir(31 downto 25) & ir(11 downto 7);
 
             -- B-type: beq, bne, blt, bge, bltu, bgeu
-            -- Immediate is already the byte offset (bit 0 = 0 implicit)
+            -- Course assembler convention: immediate is encoded as-is,
+            -- so DO NOT append an implicit bit0 here.
             when OP_BRANCH =>
-                imm <= (31 downto 13 => ir(31))
-                       & ir(31) & ir(7) & ir(30 downto 25) & ir(11 downto 8) & '0';
+                imm <= (31 downto 12 => ir(31))
+                       & ir(31) & ir(7) & ir(30 downto 25) & ir(11 downto 8);
 
             -- U-type: lui, auipc
             when OP_LUI | OP_AUIPC =>
                 imm <= ir(31 downto 12) & x"000"; -- imm = imm << 12
 
             -- J-type: jal
-            -- same as branch (bit 0 = 0 implicit)
+            -- Course assembler convention: immediate encoded as-is,
+            -- so decode without implicit bit0 append.
             when OP_JAL =>
-                imm <= (31 downto 21 => ir(31))
-                       & ir(31) & ir(19 downto 12) & ir(20) & ir(30 downto 21) & '0';
+                imm <= (31 downto 20 => ir(31))
+                       & ir(31) & ir(19 downto 12) & ir(20) & ir(30 downto 21);
 
             when others =>
                 imm <= (others => '0');

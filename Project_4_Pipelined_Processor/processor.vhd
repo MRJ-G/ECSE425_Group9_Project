@@ -163,9 +163,10 @@ begin
 
     imem_addr <= to_integer(unsigned(pc(11 downto 2)));
     
-    branch_taken <= (ex_mem.Branch and ex_mem.Cond) or ex_mem.Jump; 
+    -- Redirect from EX-stage decision so PC/flush take effect on the very next edge.
+    branch_taken <= (id_ex.Branch and br_cond) or id_ex.Jump;
 
-    pc_next <= ex_mem.BrTarget when branch_taken = '1'
+    pc_next <= br_target when branch_taken = '1'
                else std_logic_vector(unsigned(pc) + 4);
 
     process(clk)

@@ -167,13 +167,6 @@ begin
         wait until rising_edge(clk);
 
         -- Fixed expected results for branch_no_hazard program.
-        -- Program intent:
-        --   addi x1, x0, 3
-        --   addi x2, x0, 3
-        --   beq  x1, x2, target   (taken)
-        --   addi x5, x0, 99       (must be skipped)
-        -- target:
-        --   addi x6, x0, 42
         assert get_reg_word(reg_dump, 0) = std_logic_vector(to_unsigned(0, 32)) severity error;
         assert get_reg_word(reg_dump, 1) = std_logic_vector(to_unsigned(3, 32)) severity error;
         assert get_reg_word(reg_dump, 2) = std_logic_vector(to_unsigned(3, 32)) severity error;
