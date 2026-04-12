@@ -84,6 +84,7 @@ catch {add wave -position end -radix binary sim:/testbench/dmem_dump_data}
 # Branch debug waves (decode -> execute -> redirect).
 catch {add wave -position end -radix hex sim:/testbench/uut/pc}
 catch {add wave -position end -radix hex sim:/testbench/uut/pc_next}
+catch {add wave -position end -radix hex sim:/testbench/uut/fetch_pc}
 catch {add wave -position end sim:/testbench/uut/branch_taken}
 catch {add wave -position end -radix hex sim:/testbench/uut/br_target}
 catch {add wave -position end sim:/testbench/uut/br_cond}

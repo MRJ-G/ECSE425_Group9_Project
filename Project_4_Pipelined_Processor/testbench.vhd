@@ -23,18 +23,20 @@ architecture sim of testbench is
     signal reg_dump : std_logic_vector(32*32-1 downto 0);
 
     function is_valid_instr(s : string) return boolean is
+        variable bit_count : natural := 0;
     begin
-        if s'length /= 32 then -- ensure instruction is 32 bits   
-            return false;
-        end if;
-
+        -- Accept both raw 32-bit lines and nibble-mode lines (with spaces/tabs).
         for i in s'range loop
-            if (s(i) /= '0') and (s(i) /= '1') then -- ensure all characters are '0' or '1'
+            if (s(i) = '0') or (s(i) = '1') then
+                bit_count := bit_count + 1;
+            elsif (s(i) = ' ') or (s(i) = character'val(9)) or (s(i) = character'val(13)) then
+                null; -- separators are allowed
+            else
                 return false;
             end if;
         end loop;
 
-        return true;
+        return bit_count = 32;
     end function;
 
     function bin_string_to_slv32(s : string) return std_logic_vector is
@@ -42,12 +44,16 @@ architecture sim of testbench is
         variable j : integer := 31;
     begin
         for i in s'range loop
-            if s(i) = '1' then
-                v(j) := '1';
-            else
-                v(j) := '0';
+            if (s(i) = '0') or (s(i) = '1') then
+                if s(i) = '1' then
+                    v(j) := '1';
+                else
+                    v(j) := '0';
+                end if;
+                j := j - 1;
+            elsif (s(i) = ' ') or (s(i) = character'val(9)) or (s(i) = character'val(13)) then
+                null; -- ignore separators
             end if;
-            j := j - 1;
         end loop;
         return v;
     end function;
@@ -154,12 +160,6 @@ begin
         imem_load_en <= '0';
         imem_load_addr <= 0;
         imem_load_data <= (others => '0');
-
-        -- Prime instruction fetch after load-mode mux switches back to pc/imem_addr.
-        -- This prevents stale load-phase readdata (often last loaded instruction)
-        -- from being sampled on the first execute cycle after reset release.
-        wait until rising_edge(clk);
-        wait until rising_edge(clk);
 
         wait until rising_edge(clk);
         reset <= '0';
