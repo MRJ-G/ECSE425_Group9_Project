@@ -177,7 +177,14 @@ begin
                 pc <= (others => '0');
                 fetch_pc <= (others => '0');
             elsif stall = '0' then
-                fetch_pc <= pc;
+                if branch_taken = '1' then
+                    -- If branch taken, flush the instruction in IF by updating fetch_pc to new PC.
+                    -- The real PC will also be updated to new PC on this edge, but the flushed instruction
+                    -- will be the one at the old PC (since fetch_pc is used for IF/ID register input).
+                    fetch_pc <= pc_next;
+                else
+                    fetch_pc <= pc;
+                end if;
                 pc <= pc_next;
             end if; -- if stall = '1', hold the PC (don't fetch a new instruction)
         end if;

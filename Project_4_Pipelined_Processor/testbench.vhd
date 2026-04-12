@@ -155,6 +155,12 @@ begin
         imem_load_addr <= 0;
         imem_load_data <= (others => '0');
 
+        -- Prime instruction fetch after load-mode mux switches back to pc/imem_addr.
+        -- This prevents stale load-phase readdata (often last loaded instruction)
+        -- from being sampled on the first execute cycle after reset release.
+        wait until rising_edge(clk);
+        wait until rising_edge(clk);
+
         wait until rising_edge(clk);
         reset <= '0';
 

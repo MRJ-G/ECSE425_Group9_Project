@@ -3,6 +3,7 @@ main:
     addi x2, x0, 3
     nop
     nop
+    nop
     beq  x1, x2, target
     addi x5, x0, 99
 target:
