@@ -31,9 +31,10 @@ proc safe_delete_output {path} {
 }
 
 puts "==> Preparing work library"
-if {![file exists work]} {
-    vlib work
-}
+# Always delete and recreate to guarantee a clean compile
+
+vdel -lib work -all
+vlib work
 vmap work work
 
 puts "==> Compiling design files"
@@ -70,7 +71,7 @@ vsim -voptargs=+acc work.testbench
 # testbench.vhd uses CLK_PERIOD = 1 ns.
 # Need enough cycles for: program load + RUN_CYCLES (2500) + memory dump blocks (256) + register dump.
 # Keep a safe margin for longer programs.
-set run_cycles 6000
+set run_cycles 10000
 set run_time_ns $run_cycles
 
 # Optional waves when running in GUI mode; ignored in batch mode.
@@ -122,3 +123,4 @@ if {$is_batch} {
 } else {
     puts "INFO: GUI mode detected; simulation kept open."
 }
+

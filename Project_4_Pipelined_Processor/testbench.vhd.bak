@@ -37,6 +37,15 @@ architecture sim of testbench is
         return bit_count = 32;
     end function;
 
+    function is_separator(s : string) return boolean is
+    begin
+        -- Any line starting with '-' is treated as a program separator
+        if s'length > 0 and s(s'left) = '-' then
+            return true;
+        end if;
+        return false;
+    end function;
+
     function bin_string_to_slv32(s : string) return std_logic_vector is
         variable v : std_logic_vector(31 downto 0) := (others => '0');
         variable j : integer := 31;
@@ -103,9 +112,10 @@ begin
     end process;
 
     stim_process: process
-        file prog_file : text;
-        file mem_file  : text;
-        file reg_file  : text;
+        -- Single file containing all 4 programs separated by "--------"
+        file f        : text;
+        file mem_file : text;
+        file reg_file : text;
 
         variable ln          : line;
         variable out_ln      : line;
@@ -115,16 +125,21 @@ begin
         wait until rising_edge(clk);
         wait until rising_edge(clk);
 
+        -- Open the single combined program file once.
+        -- Format: binary instructions for each test, separated by "--------"
+        -- Order: hazard_simple / branch_no_hazard / mul_no_hazard / arith_mem_no_hazard
+        file_open(f, "program.txt", read_mode);
+
         -- ==============================================================
         -- TEST 1: hazard_simple
         --   x1=5  x2=8  x3=12  x4=17  x5=18   mem all zero
         -- ==============================================================
         report "Test 1 started: hazard_simple" severity note;
         instr_count := 0;
-        file_open(prog_file, "hazard_simple.txt", read_mode);
-        while not endfile(prog_file) loop
-            readline(prog_file, ln);
+        while not endfile(f) loop
+            readline(f, ln);
             if ln'length = 0 then next; end if;
+            exit when is_separator(ln.all);     -- "--------" ends this block
             assert is_valid_instr(ln.all)
                 report "hazard_simple: invalid instruction at index " &
                        integer'image(instr_count) severity failure;
@@ -134,7 +149,6 @@ begin
             wait until rising_edge(clk);
             instr_count := instr_count + 1;
         end loop;
-        file_close(prog_file);
         imem_load_en <= '0'; imem_load_addr <= 0; imem_load_data <= (others => '0');
         wait until rising_edge(clk);
         reset <= '0';
@@ -172,10 +186,10 @@ begin
         -- ==============================================================
         report "Test 2 started: branch_no_hazard" severity note;
         instr_count := 0;
-        file_open(prog_file, "branch_no_hazard.txt", read_mode);
-        while not endfile(prog_file) loop
-            readline(prog_file, ln);
+        while not endfile(f) loop
+            readline(f, ln);
             if ln'length = 0 then next; end if;
+            exit when is_separator(ln.all);
             assert is_valid_instr(ln.all)
                 report "branch_no_hazard: invalid instruction at index " &
                        integer'image(instr_count) severity failure;
@@ -185,7 +199,6 @@ begin
             wait until rising_edge(clk);
             instr_count := instr_count + 1;
         end loop;
-        file_close(prog_file);
         imem_load_en <= '0'; imem_load_addr <= 0; imem_load_data <= (others => '0');
         wait until rising_edge(clk);
         reset <= '0';
@@ -225,10 +238,10 @@ begin
         -- ==============================================================
         report "Test 3 started: mul_no_hazard" severity note;
         instr_count := 0;
-        file_open(prog_file, "mul_no_hazard.txt", read_mode);
-        while not endfile(prog_file) loop
-            readline(prog_file, ln);
+        while not endfile(f) loop
+            readline(f, ln);
             if ln'length = 0 then next; end if;
+            exit when is_separator(ln.all);
             assert is_valid_instr(ln.all)
                 report "mul_no_hazard: invalid instruction at index " &
                        integer'image(instr_count) severity failure;
@@ -238,7 +251,6 @@ begin
             wait until rising_edge(clk);
             instr_count := instr_count + 1;
         end loop;
-        file_close(prog_file);
         imem_load_en <= '0'; imem_load_addr <= 0; imem_load_data <= (others => '0');
         wait until rising_edge(clk);
         reset <= '0';
@@ -268,16 +280,17 @@ begin
         wait until rising_edge(clk); wait until rising_edge(clk);
 
         -- ==============================================================
-        -- TEST 4: arith_mem_no_hazard
+        -- TEST 4: arith_mem_no_hazard  (last â?? writes data memory)
         --   x1=5  x2=7  x3=12 (x1+x2)  x4=12 (lw from mem[0])
         --   sw x3,0(x0) -> memory[0]=12
         -- ==============================================================
         report "Test 4 started: arith_mem_no_hazard" severity note;
         instr_count := 0;
-        file_open(prog_file, "arith_mem_no_hazard.txt", read_mode);
-        while not endfile(prog_file) loop
-            readline(prog_file, ln);
+        -- No separator after last block, read until EOF
+        while not endfile(f) loop
+            readline(f, ln);
             if ln'length = 0 then next; end if;
+            exit when is_separator(ln.all);
             assert is_valid_instr(ln.all)
                 report "arith_mem_no_hazard: invalid instruction at index " &
                        integer'image(instr_count) severity failure;
@@ -287,7 +300,7 @@ begin
             wait until rising_edge(clk);
             instr_count := instr_count + 1;
         end loop;
-        file_close(prog_file);
+        file_close(f);  -- done with programs.txt
         imem_load_en <= '0'; imem_load_addr <= 0; imem_load_data <= (others => '0');
         wait until rising_edge(clk);
         reset <= '0';
@@ -345,3 +358,10 @@ begin
     end process;
 
 end architecture sim;
+
+
+
+
+
+
+

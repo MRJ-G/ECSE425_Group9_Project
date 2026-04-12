@@ -12,6 +12,7 @@ ENTITY memory IS
     );
     PORT (
         clock     : IN  STD_LOGIC;
+        reset     : IN  STD_LOGIC;
         writedata : IN  STD_LOGIC_VECTOR(31 DOWNTO 0);
         address   : IN  INTEGER RANGE 0 TO ram_size-1;
         memwrite  : IN  STD_LOGIC;
@@ -29,7 +30,11 @@ BEGIN
     mem_process: PROCESS (clock)
     BEGIN
         IF (clock'event AND clock = '1') THEN
-            IF (memwrite = '1') THEN
+            IF reset = '1' THEN
+                FOR i IN 0 TO ram_size-1 LOOP
+                    ram_block(i) <= (others => '0');
+                END LOOP;
+            ELSIF (memwrite = '1') THEN
                 ram_block(address) <= writedata;
             END IF;
         END IF;
