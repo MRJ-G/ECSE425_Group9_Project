@@ -30,7 +30,6 @@ architecture rtl of processor is
     -- PC
     signal pc      : std_logic_vector(31 downto 0) := (others => '0');
     signal pc_next : std_logic_vector(31 downto 0);
-    signal fetch_pc : std_logic_vector(31 downto 0) := (others => '0');
 
     -- Hazard / flush
     signal stall       : std_logic := '0';
@@ -90,7 +89,6 @@ begin
             writedata => imem_load_data,
             address   => imem_real_addr,
             memwrite  => imem_load_en,
-            memread   => '1',
             readdata  => imem_readdata,
             dump_base_addr => 0,
             dump_out       => open
@@ -104,7 +102,6 @@ begin
             writedata => ex_mem.B,
             address   => dmem_addr,
             memwrite  => dmem_write_en,
-            memread   => '1',
             readdata  => dmem_readdata,
             dump_base_addr => dmem_dump_addr,
             dump_out       => dmem_dump_bus
@@ -162,7 +159,8 @@ begin
     --  STAGE 1: INSTRUCTION FETCH
     -- ================================================================
 
-    imem_addr <= to_integer(unsigned(pc(11 downto 2)));
+    imem_addr <= to_integer(unsigned(pc(11 downto 2))) when branch_taken = '0'      
+                    else to_integer(unsigned(br_target(11 downto 2)));
     
     -- Redirect from EX-stage decision so PC/flush take effect on the very next edge.
     branch_taken <= (id_ex.Branch and br_cond) or id_ex.Jump;
@@ -175,16 +173,7 @@ begin
         if rising_edge(clk) then
             if reset = '1' then
                 pc <= (others => '0');
-                fetch_pc <= (others => '0');
             elsif stall = '0' then
-                if branch_taken = '1' then
-                    -- If branch taken, flush the instruction in IF by updating fetch_pc to new PC.
-                    -- The real PC will also be updated to new PC on this edge, but the flushed instruction
-                    -- will be the one at the old PC (since fetch_pc is used for IF/ID register input).
-                    fetch_pc <= pc_next;
-                else
-                    fetch_pc <= pc;
-                end if;
                 pc <= pc_next;
             end if; -- if stall = '1', hold the PC (don't fetch a new instruction)
         end if;
@@ -201,8 +190,8 @@ begin
                 if_id <= IF_ID_ZERO;
             elsif stall = '0' then
                 if_id.IR  <= imem_readdata;
-                if_id.PC  <= fetch_pc;
-                if_id.NPC <= std_logic_vector(unsigned(fetch_pc) + 4);
+                if_id.PC  <= pc;
+                if_id.NPC <= std_logic_vector(unsigned(pc) + 4);
             end if;
         end if;
     end process;
@@ -352,18 +341,49 @@ begin
                   else mem_wb.ALUOutput;
 
     -- ================================================================
-    --  HAZARD DETECTION (placeholder)
+    --  HAZARD DETECTION
     -- ================================================================
-    -- Uncomment to enable:
-    -- stall <= '1' when
-    --   (id_ex.RegWrite='1' and get_rd(id_ex.IR)/="00000" and
-    --    (get_rd(id_ex.IR)=get_rs1(if_id.IR) or
-    --     get_rd(id_ex.IR)=get_rs2(if_id.IR)))
-    --   or
-    --   (ex_mem.RegWrite='1' and get_rd(ex_mem.IR)/="00000" and
-    --    (get_rd(ex_mem.IR)=get_rs1(if_id.IR) or
-    --     get_rd(ex_mem.IR)=get_rs2(if_id.IR)))
-    --   else '0';
-    stall <= '0';
+    --
+    --  The hazard_detection unit monitors the three downstream pipeline
+    --  registers (ID/EX, EX/MEM, MEM/WB) and compares each producer's
+    --  destination register (rd) against the consumer's source registers
+    --  (rs1, rs2) currently in the IF/ID register.
+    --
+    --  When stall = '1':
+    --    • IF/ID register is frozen (PC and instruction do not advance).
+    --    • ID/EX register is loaded with a NOP bubble (ID_EX_ZERO).
+    --    • The downstream pipeline (EX, MEM, WB) continues normally,
+    --      draining the hazardous instruction out of the pipeline.
+    --
+    --  The cascade behaviour:
+    --    A producer two stages ahead (in EX) requires two stall cycles.
+    --    Because IF/ID is frozen, the same consumer instruction remains in
+    --    ID each stall cycle.  On the first stall cycle the producer is in
+    --    EX → hazard_ex fires.  On the second stall cycle the producer has
+    --    moved to MEM → hazard_mem fires.  On the third cycle the producer
+    --    has moved to WB and written the register → no hazard, pipeline
+    --    resumes.  Thus the single combinatorial condition naturally produces
+    --    the correct number of stall cycles without an explicit counter.
+    --
+    --  Branch / jump interactions:
+    --    branch_taken overrides stall for the IF/ID and ID/EX flush paths.
+    --    The ordering in the clocked processes (branch_taken checked before
+    --    stall) ensures correct priority: a taken branch flushes even if a
+    --    stall would also be requested.  In practice a branch in the EX
+    --    stage cannot simultaneously cause a hazard for the instruction
+    --    immediately following it (that instruction is in ID and will be
+    --    flushed anyway), so the two conditions do not conflict.
+ 
+    u_hazard: entity work.hazard_detection
+        port map(
+            if_id_ir        => if_id.IR,
+            id_ex_ir        => id_ex.IR,
+            id_ex_regwrite  => id_ex.RegWrite,
+            ex_mem_ir       => ex_mem.IR,
+            ex_mem_regwrite => ex_mem.RegWrite,
+            mem_wb_ir       => mem_wb.IR,
+            mem_wb_regwrite => mem_wb.RegWrite,
+            stall           => stall
+        );
 
 end architecture rtl;

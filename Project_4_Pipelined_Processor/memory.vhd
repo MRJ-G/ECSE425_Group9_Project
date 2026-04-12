@@ -15,7 +15,6 @@ ENTITY memory IS
         writedata : IN  STD_LOGIC_VECTOR(31 DOWNTO 0);
         address   : IN  INTEGER RANGE 0 TO ram_size-1;
         memwrite  : IN  STD_LOGIC;
-        memread   : IN  STD_LOGIC;
         readdata  : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
         -- testbench dump port: read 32 consecutive words at once
         dump_base_addr : IN  INTEGER RANGE 0 TO ram_size-1;
@@ -26,7 +25,6 @@ END memory;
 ARCHITECTURE rtl OF memory IS
     TYPE MEM IS ARRAY(ram_size-1 downto 0) OF STD_LOGIC_VECTOR(31 DOWNTO 0);
     SIGNAL ram_block : MEM := (others => (others => '0'));
-    SIGNAL read_address_reg : INTEGER RANGE 0 TO ram_size-1;
 BEGIN
     mem_process: PROCESS (clock)
     BEGIN
@@ -34,11 +32,11 @@ BEGIN
             IF (memwrite = '1') THEN
                 ram_block(address) <= writedata;
             END IF;
-            read_address_reg <= address;
         END IF;
     END PROCESS;
 
-    readdata <= ram_block(read_address_reg);
+    -- Combinatorial read: readdata reflects current address immediately
+    readdata <= ram_block(address);
 
     -- Flatten 32-word dump window for testbench.
     process(ram_block, dump_base_addr)

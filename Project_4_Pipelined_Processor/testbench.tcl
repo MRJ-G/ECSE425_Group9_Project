@@ -43,6 +43,7 @@ vcom -2008 control.vhd
 vcom -2008 imm_gen.vhd
 vcom -2008 memory.vhd
 vcom -2008 register_file.vhd
+vcom -2008 hazard_detection.vhd
 vcom -2008 processor.vhd
 vcom -2008 testbench.vhd
 
@@ -50,7 +51,7 @@ vcom -2008 testbench.vhd
 # Keep that file in sync with the currently selected sample program so the
 # processor is not accidentally driven by a stale image from a previous run.
 set script_dir [file dirname [file normalize [info script]]]
-set program_source [file join $script_dir no_hazard_examples branch_no_hazard.txt]
+set program_source [file join $script_dir no_hazard_examples hazard_simple.txt]
 set program_target [file join $script_dir program.txt]
 file copy -force $program_source $program_target
 puts "==> Program image: $program_source -> $program_target"
@@ -84,7 +85,6 @@ catch {add wave -position end -radix binary sim:/testbench/dmem_dump_data}
 # Branch debug waves (decode -> execute -> redirect).
 catch {add wave -position end -radix hex sim:/testbench/uut/pc}
 catch {add wave -position end -radix hex sim:/testbench/uut/pc_next}
-catch {add wave -position end -radix hex sim:/testbench/uut/fetch_pc}
 catch {add wave -position end sim:/testbench/uut/branch_taken}
 catch {add wave -position end -radix hex sim:/testbench/uut/br_target}
 catch {add wave -position end sim:/testbench/uut/br_cond}
