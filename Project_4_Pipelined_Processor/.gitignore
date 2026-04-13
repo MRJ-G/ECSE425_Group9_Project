@@ -1,0 +1,27 @@
+# -----------------------------
+# OS / Explorer noise
+# -----------------------------
+.DS_Store
+Thumbs.db
+*.bak
+
+# -----------------------------
+# ModelSim / QuestaSim generated files
+# -----------------------------
+# Compiled library directory
+work/
+**/work/
+
+# Simulation databases / wave dumps
+vsim.wlf
+*.wlf
+*.vstf
+*.vcd
+*.fst
+
+# Tool session / transcript artifacts
+transcript
+vsim_stacktrace.vstf
+
+# Auto-generated simulator ini
+modelsim.ini

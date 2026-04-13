@@ -31,9 +31,10 @@ proc safe_delete_output {path} {
 }
 
 puts "==> Preparing work library"
-# Always delete and recreate to guarantee a clean compile
-
-vdel -lib work -all
+# Always recreate work when present; tolerate first-run where work is absent.
+if {[file exists work]} {
+    catch {vdel -lib work -all}
+}
 vlib work
 vmap work work
 
@@ -49,13 +50,18 @@ vcom -2008 processor.vhd
 vcom -2008 testbench.vhd
 
 # The VHDL testbench reads program.txt from the simulation working directory.
-# Keep that file in sync with the currently selected sample program so the
-# processor is not accidentally driven by a stale image from a previous run.
+# Single-entry flow: user prepares/replaces program.txt before running.
 set script_dir [file dirname [file normalize [info script]]]
-set program_source [file join $script_dir no_hazard_examples hazard_simple.txt]
 set program_target [file join $script_dir program.txt]
-file copy -force $program_source $program_target
-puts "==> Program image: $program_source -> $program_target"
+if {![file exists $program_target]} {
+    puts "ERROR: program.txt not found at $program_target"
+    if {$is_batch} {
+        quit -code 1
+    } else {
+        error "program.txt not found"
+    }
+}
+puts "==> Program image: $program_target"
 
 # Force the simulator working directory to the project directory so the VHDL
 # file_open("program.txt") call resolves to the expected file.
@@ -89,10 +95,13 @@ catch {add wave -position end -radix hex sim:/testbench/uut/pc_next}
 catch {add wave -position end sim:/testbench/uut/branch_taken}
 catch {add wave -position end -radix hex sim:/testbench/uut/br_target}
 catch {add wave -position end sim:/testbench/uut/br_cond}
+catch {add wave -position end sim:/testbench/uut/wb_rd_addr}
+catch {add wave -position end sim:/testbench/uut/wb_rd_data}
 
 catch {add wave -position end -radix hex sim:/testbench/uut/if_id}
 catch {add wave -position end -radix hex sim:/testbench/uut/id_ex}
 catch {add wave -position end -radix hex sim:/testbench/uut/ex_mem}
+catch {add wave -position end -radix hex sim:/testbench/uut/mem_wb}
 
 puts "==> Running fixed simulation length: $run_cycles cycles (${run_time_ns} ns)"
 run ${run_time_ns} ns
