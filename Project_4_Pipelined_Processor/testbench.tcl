@@ -95,10 +95,13 @@ catch {add wave -position end -radix hex sim:/testbench/uut/pc_next}
 catch {add wave -position end sim:/testbench/uut/branch_taken}
 catch {add wave -position end -radix hex sim:/testbench/uut/br_target}
 catch {add wave -position end sim:/testbench/uut/br_cond}
+catch {add wave -position end sim:/testbench/uut/wb_rd_addr}
+catch {add wave -position end sim:/testbench/uut/wb_rd_data}
 
 catch {add wave -position end -radix hex sim:/testbench/uut/if_id}
 catch {add wave -position end -radix hex sim:/testbench/uut/id_ex}
 catch {add wave -position end -radix hex sim:/testbench/uut/ex_mem}
+catch {add wave -position end -radix hex sim:/testbench/uut/mem_wb}
 
 puts "==> Running fixed simulation length: $run_cycles cycles (${run_time_ns} ns)"
 run ${run_time_ns} ns

@@ -164,53 +164,13 @@ begin
         wait until rising_edge(clk);
         reset <= '0';
 
-        for i in 1 to RUN_CYCLES loop
+        for i in 1 to RUN_CYCLES loop -- processor run fixed cycles to finish program execution; adjust as needed
             wait until rising_edge(clk);
         end loop;
 
-        -- Assertions: evaluate architectural state before forcing reset.
         dmem_dump_addr <= 0;
         wait until rising_edge(clk);
-
-        -- DELETE THE FIXED ASSERTIONS WHEN SUBMISSION
-        -- Fixed expected results for hazard_detection program.
-        assert get_reg_word(reg_dump, 0) = std_logic_vector(to_unsigned(0, 32)) severity error;
-        assert get_reg_word(reg_dump, 1) = std_logic_vector(to_unsigned(5, 32))
-            report "hazard_detection: expected x1 = 5"
-            severity error;
-        assert get_reg_word(reg_dump, 2) = std_logic_vector(to_unsigned(8, 32))
-            report "hazard_detection: expected x2 = 8 (x1 + 3)"
-            severity error;
-        assert get_reg_word(reg_dump, 3) = std_logic_vector(to_unsigned(12, 32))
-            report "hazard_detection: expected x3 = 12 (x2 + 4)"
-            severity error;
-        assert get_reg_word(reg_dump, 4) = std_logic_vector(to_unsigned(17, 32))
-            report "hazard_detection: expected x4 = 17 (x3 + x1)"
-            severity error;
-        assert get_reg_word(reg_dump, 5) = std_logic_vector(to_unsigned(18, 32))
-            report "hazard_detection: expected x5 = 18 (x4 + 1)"
-            severity error;
-
-        -- x6..x31 should remain zero in this program.
-        for i in 6 to 31 loop
-            assert get_reg_word(reg_dump, i) = std_logic_vector(to_unsigned(0, 32))
-                report "hazard_detection: expected x" & integer'image(i) & " = 0"
-                severity error;
-        end loop;
-
-        -- No stores in hazard_detection, so memory should stay at zero.
-        assert get_mem_dump_word(dmem_dump_data, 0) = std_logic_vector(to_unsigned(0, 32))
-            report "hazard_detection: expected memory[0] = 0"
-            severity error;
-        assert get_mem_dump_word(dmem_dump_data, 1) = std_logic_vector(to_unsigned(0, 32))
-            report "hazard_detection: expected memory[1] = 0"
-            severity error;
-
-        report "Assertions passed for fixed program: hazard_detection"
-            severity note;
-
-        -- Do not reset before dump: keep architectural state from the just-finished run.
-        wait until rising_edge(clk);
+        wait until rising_edge(clk); -- allow one cycle for dump data to stabilize
 
         file_open(mem_file, "memory.txt", write_mode);
         for blk in 0 to 255 loop
