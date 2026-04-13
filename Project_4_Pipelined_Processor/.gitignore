@@ -29,6 +29,5 @@ modelsim.ini
 # -----------------------------
 # Testbench-generated runtime outputs
 # -----------------------------
-program.txt
 memory.txt
 register_file.txt

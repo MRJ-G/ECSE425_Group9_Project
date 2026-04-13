@@ -49,13 +49,18 @@ vcom -2008 processor.vhd
 vcom -2008 testbench.vhd
 
 # The VHDL testbench reads program.txt from the simulation working directory.
-# Keep that file in sync with the currently selected sample program so the
-# processor is not accidentally driven by a stale image from a previous run.
+# Single-entry flow: user prepares/replaces program.txt before running.
 set script_dir [file dirname [file normalize [info script]]]
-set program_source [file join $script_dir no_hazard_examples hazard_simple.txt]
 set program_target [file join $script_dir program.txt]
-file copy -force $program_source $program_target
-puts "==> Program image: $program_source -> $program_target"
+if {![file exists $program_target]} {
+    puts "ERROR: program.txt not found at $program_target"
+    if {$is_batch} {
+        quit -code 1
+    } else {
+        error "program.txt not found"
+    }
+}
+puts "==> Program image: $program_target"
 
 # Force the simulator working directory to the project directory so the VHDL
 # file_open("program.txt") call resolves to the expected file.
