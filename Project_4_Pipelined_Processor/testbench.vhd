@@ -8,7 +8,7 @@ end entity testbench;
 
 architecture sim of testbench is
     constant CLK_PERIOD : time := 1 ns; -- 1 GHz
-    constant RUN_CYCLES : natural := 2500;
+    constant RUN_CYCLES : natural := 10000;  -- assignment requirement: 10 000 cycles
 
     signal clk : std_logic := '0';
     signal reset : std_logic := '1';
@@ -164,13 +164,31 @@ begin
         wait until rising_edge(clk);
         reset <= '0';
 
-        for i in 1 to RUN_CYCLES loop -- processor run fixed cycles to finish program execution; adjust as needed
+        for i in 1 to RUN_CYCLES loop
             wait until rising_edge(clk);
         end loop;
 
+        -- Dump register file FIRST while reset is still '0'.
+        -- register_file has an asynchronous reset: asserting reset before the
+        -- dump would immediately clear all registers, giving all-zero output.
+        file_open(reg_file, "register_file.txt", write_mode);
+        for i in 0 to 31 loop
+            reg_word := reg_dump(32*(i+1)-1 downto 32*i);
+            write(out_line, slv_to_bin_string(reg_word));
+            writeline(reg_file, out_line);
+        end loop;
+        file_close(reg_file);
+
+        report "Simulation complete - 10000 cycles executed."
+            severity note;
+
+        -- Dump data memory.  The dump port (dump_base_addr / dmem_dump_data)
+        -- is a combinatorial window into memory; it does not depend on the
+        -- processor being in reset.  We do NOT assert reset here because the
+        -- memory has a synchronous reset: the first clock edge after reset='1'
+        -- would erase all stored data before we finish scanning.
         dmem_dump_addr <= 0;
         wait until rising_edge(clk);
-        wait until rising_edge(clk); -- allow one cycle for dump data to stabilize
 
         file_open(mem_file, "memory.txt", write_mode);
         for blk in 0 to 255 loop
@@ -182,14 +200,6 @@ begin
             end loop;
         end loop;
         file_close(mem_file);
-
-        file_open(reg_file, "register_file.txt", write_mode);
-        for i in 0 to 31 loop
-            reg_word := reg_dump(32*(i+1)-1 downto 32*i);
-            write(out_line, slv_to_bin_string(reg_word));
-            writeline(reg_file, out_line);
-        end loop;
-        file_close(reg_file);
 
         report "Simulation complete. Loaded instructions: " & integer'image(instr_count)
             severity note;

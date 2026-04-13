@@ -71,6 +71,10 @@ architecture rtl of processor is
     signal dmem_readdata  : std_logic_vector(31 downto 0);
     signal dmem_write_en  : std_logic;
     signal dmem_dump_bus  : std_logic_vector(32*32-1 downto 0);
+    -- Byte/halfword store: computed write data (read-modify-write for sb/sh)
+    signal dmem_writedata : std_logic_vector(31 downto 0);
+    -- Byte/halfword load: sign/zero-extended value presented to WB
+    signal load_data_ext  : std_logic_vector(31 downto 0);
 
 begin
 
@@ -101,7 +105,7 @@ begin
         port map(
             clock     => clk,
             reset     => reset,
-            writedata => ex_mem.B,
+            writedata => dmem_writedata,
             address   => dmem_addr,
             memwrite  => dmem_write_en,
             readdata  => dmem_readdata,
@@ -176,9 +180,11 @@ begin
         if rising_edge(clk) then
             if reset = '1' then
                 pc <= (others => '0');
+            elsif branch_taken = '1' then
+                pc <= br_target;   -- branch beats stall
             elsif stall = '0' then
                 pc <= pc_next;
-            end if; -- if stall = '1', hold the PC (don't fetch a new instruction)
+            end if; -- if stall = '1' (and no branch), hold the PC
         end if;
     end process;
 
@@ -266,12 +272,12 @@ begin
         ua := unsigned(id_ex.A); -- not required
         ub := unsigned(id_ex.B); -- not required
         case id_ex.BrType is
-            when BR_BEQ  => br_cond <= '1' when id_ex.A = id_ex.B   else '0';
-            when BR_BNE  => br_cond <= '1' when id_ex.A /= id_ex.B  else '0';
-            when BR_BLT  => br_cond <= '1' when sa < sb             else '0';
-            when BR_BGE  => br_cond <= '1' when sa >= sb            else '0';
-            when BR_BLTU => br_cond <= '1' when ua < ub             else '0'; -- not required
-            when BR_BGEU => br_cond <= '1' when ua >= ub            else '0'; -- not required
+            when BR_BEQ  => if id_ex.A = id_ex.B  then br_cond <= '1'; else br_cond <= '0'; end if;
+            when BR_BNE  => if id_ex.A /= id_ex.B then br_cond <= '1'; else br_cond <= '0'; end if;
+            when BR_BLT  => if sa < sb             then br_cond <= '1'; else br_cond <= '0'; end if;
+            when BR_BGE  => if sa >= sb            then br_cond <= '1'; else br_cond <= '0'; end if;
+            when BR_BLTU => if ua < ub             then br_cond <= '1'; else br_cond <= '0'; end if;
+            when BR_BGEU => if ua >= ub            then br_cond <= '1'; else br_cond <= '0'; end if;
             when others  => br_cond <= '0';
         end case;
     end process;
@@ -283,8 +289,9 @@ begin
     process(clk)
     begin
         if rising_edge(clk) then
-            -- Do not flush EX/MEM on branch_taken: the current EX instruction
-            -- (including JAL/JALR link write) must continue to WB.
+            -- Do NOT flush on branch_taken: the branch/jump itself is in EX and
+            -- must complete WB (e.g. JAL writes PC+4 to rd).  Only IF/ID and
+            -- ID/EX carry wrongly-fetched instructions and need flushing.
             if reset = '1' then
                 ex_mem <= EX_MEM_ZERO;
             else
@@ -312,8 +319,80 @@ begin
     dmem_addr    <= to_integer(unsigned(ex_mem.ALUOutput(14 downto 2)));
     dmem_write_en <= ex_mem.MemWrite;
 
-    -- lw: just pass the full word through
-    -- sw: ex_mem.B is connected directly to memory writedata above
+    -- Store write-data: sw passes ex_mem.B unchanged; sh/sb perform a
+    -- read-modify-write so only the target byte/halfword is updated.
+    process(ex_mem, dmem_readdata)
+        variable funct3   : std_logic_vector(2 downto 0);
+        variable byte_off : integer range 0 to 3;
+        variable merged   : std_logic_vector(31 downto 0);
+    begin
+        funct3   := get_funct3(ex_mem.IR);
+        byte_off := to_integer(unsigned(ex_mem.ALUOutput(1 downto 0)));
+        merged   := dmem_readdata;
+        case funct3 is
+            when "010" =>           -- sw: full word
+                merged := ex_mem.B;
+            when "001" =>           -- sh: replace the correct halfword
+                if ex_mem.ALUOutput(1) = '0' then
+                    merged(15 downto 0)  := ex_mem.B(15 downto 0);
+                else
+                    merged(31 downto 16) := ex_mem.B(15 downto 0);
+                end if;
+            when "000" =>           -- sb: replace the correct byte
+                case byte_off is
+                    when 0 => merged(7  downto 0)  := ex_mem.B(7 downto 0);
+                    when 1 => merged(15 downto 8)  := ex_mem.B(7 downto 0);
+                    when 2 => merged(23 downto 16) := ex_mem.B(7 downto 0);
+                    when 3 => merged(31 downto 24) := ex_mem.B(7 downto 0);
+                end case;
+            when others =>
+                merged := ex_mem.B;
+        end case;
+        dmem_writedata <= merged;
+    end process;
+
+    -- Load data extraction: sign/zero-extend byte or halfword for
+    -- lb/lbu/lh/lhu; lw passes the full word unchanged.
+    process(mem_wb)
+        variable funct3   : std_logic_vector(2 downto 0);
+        variable byte_off : integer range 0 to 3;
+        variable ext      : std_logic_vector(31 downto 0);
+    begin
+        funct3   := get_funct3(mem_wb.IR);
+        byte_off := to_integer(unsigned(mem_wb.ALUOutput(1 downto 0)));
+        ext      := mem_wb.LMD;
+        case funct3 is
+            when "010" => ext := mem_wb.LMD;  -- lw
+            when "001" =>                      -- lh: sign-extend halfword
+                if mem_wb.ALUOutput(1) = '0' then
+                    ext := (31 downto 16 => mem_wb.LMD(15)) & mem_wb.LMD(15 downto 0);
+                else
+                    ext := (31 downto 16 => mem_wb.LMD(31)) & mem_wb.LMD(31 downto 16);
+                end if;
+            when "101" =>                      -- lhu: zero-extend halfword
+                if mem_wb.ALUOutput(1) = '0' then
+                    ext := x"0000" & mem_wb.LMD(15 downto 0);
+                else
+                    ext := x"0000" & mem_wb.LMD(31 downto 16);
+                end if;
+            when "000" =>                      -- lb: sign-extend byte
+                case byte_off is
+                    when 0 => ext := (31 downto 8 => mem_wb.LMD(7))  & mem_wb.LMD(7  downto 0);
+                    when 1 => ext := (31 downto 8 => mem_wb.LMD(15)) & mem_wb.LMD(15 downto 8);
+                    when 2 => ext := (31 downto 8 => mem_wb.LMD(23)) & mem_wb.LMD(23 downto 16);
+                    when 3 => ext := (31 downto 8 => mem_wb.LMD(31)) & mem_wb.LMD(31 downto 24);
+                end case;
+            when "100" =>                      -- lbu: zero-extend byte
+                case byte_off is
+                    when 0 => ext := x"000000" & mem_wb.LMD(7  downto 0);
+                    when 1 => ext := x"000000" & mem_wb.LMD(15 downto 8);
+                    when 2 => ext := x"000000" & mem_wb.LMD(23 downto 16);
+                    when 3 => ext := x"000000" & mem_wb.LMD(31 downto 24);
+                end case;
+            when others => ext := mem_wb.LMD;
+        end case;
+        load_data_ext <= ext;
+    end process;
 
     -- ================================================================
     --  MEM/WB PIPELINE REGISTER
@@ -341,7 +420,7 @@ begin
 
     wb_rd_addr <= get_rd(mem_wb.IR);
 
-    wb_rd_data <= mem_wb.LMD       when mem_wb.MemToReg = WB_MEM
+    wb_rd_data <= load_data_ext    when mem_wb.MemToReg = WB_MEM
                   else mem_wb.NPC  when mem_wb.MemToReg = WB_PC4
                   else mem_wb.ALUOutput;
 
