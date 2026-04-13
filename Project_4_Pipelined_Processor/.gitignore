@@ -25,9 +25,3 @@ vsim_stacktrace.vstf
 
 # Auto-generated simulator ini
 modelsim.ini
-
-# -----------------------------
-# Testbench-generated runtime outputs
-# -----------------------------
-memory.txt
-register_file.txt

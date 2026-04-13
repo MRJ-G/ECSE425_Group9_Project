@@ -31,9 +31,10 @@ proc safe_delete_output {path} {
 }
 
 puts "==> Preparing work library"
-# Always delete and recreate to guarantee a clean compile
-
-vdel -lib work -all
+# Always recreate work when present; tolerate first-run where work is absent.
+if {[file exists work]} {
+    catch {vdel -lib work -all}
+}
 vlib work
 vmap work work
 

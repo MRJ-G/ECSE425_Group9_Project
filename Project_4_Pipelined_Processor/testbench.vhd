@@ -209,9 +209,7 @@ begin
         report "Assertions passed for fixed program: hazard_detection"
             severity note;
 
-        -- Hold core in reset so memory dump address is selected by dmem_dump_addr.
-        reset <= '1';
-        wait until rising_edge(clk);
+        -- Do not reset before dump: keep architectural state from the just-finished run.
         wait until rising_edge(clk);
 
         file_open(mem_file, "memory.txt", write_mode);

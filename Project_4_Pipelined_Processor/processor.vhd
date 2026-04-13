@@ -283,7 +283,9 @@ begin
     process(clk)
     begin
         if rising_edge(clk) then
-            if reset = '1' or branch_taken = '1' then
+            -- Do not flush EX/MEM on branch_taken: the current EX instruction
+            -- (including JAL/JALR link write) must continue to WB.
+            if reset = '1' then
                 ex_mem <= EX_MEM_ZERO;
             else
                 ex_mem.IR        <= id_ex.IR;
