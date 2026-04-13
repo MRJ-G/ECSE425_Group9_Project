@@ -77,7 +77,7 @@ vsim -voptargs=+acc work.testbench
 # testbench.vhd uses CLK_PERIOD = 1 ns.
 # Need enough cycles for: program load + RUN_CYCLES (2500) + memory dump blocks (256) + register dump.
 # Keep a safe margin for longer programs.
-set run_cycles 10000
+set run_cycles 10100
 set run_time_ns $run_cycles
 
 # Optional waves when running in GUI mode; ignored in batch mode.
