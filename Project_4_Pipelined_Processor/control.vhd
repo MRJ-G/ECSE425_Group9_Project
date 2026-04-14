@@ -37,7 +37,7 @@ begin
         Jump     <= '0'; IsJALR  <= '0';
 
         case opcode is
-            -- R-type: add, sub, mul, and, or, sll, srl, sra, slt, sltu
+            -- R-type: add, sub, mul, and, or, sll, srl, sra
             when OP_RTYPE =>
                 RegWrite <= '1';
                 case funct3 is
@@ -47,9 +47,6 @@ begin
                         else                       ALUOp <= ALU_ADD; -- funct7 = 0x00
                         end if;
                     when "001" => ALUOp <= ALU_SLL;
-                    when "010" => ALUOp <= ALU_SLT; -- not required
-                    when "011" => ALUOp <= ALU_SLTU; -- not required
-                    when "100" => ALUOp <= ALU_XOR; -- not required
                     when "101" =>
                         if funct7(5) = '1' then ALUOp <= ALU_SRA; -- funct7 = 0x20
                         else                    ALUOp <= ALU_SRL;
@@ -59,20 +56,14 @@ begin
                     when others => null;
                 end case;
 
-            -- I-type ALU: addi, xori, ori, andi, slti, sltiu, slli, srli, srai
+            -- I-type ALU: addi, xori, ori, andi, slti
             when OP_ITYPE =>
                 RegWrite <= '1';
                 ALUSrc   <= '1'; -- use immediate
                 case funct3 is
                     when "000" => ALUOp <= ALU_ADD;
-                    when "001" => ALUOp <= ALU_SLL; -- not required
                     when "010" => ALUOp <= ALU_SLT;
-                    when "011" => ALUOp <= ALU_SLTU; -- not required
                     when "100" => ALUOp <= ALU_XOR;
-                    when "101" =>
-                        if funct7(5) = '1' then ALUOp <= ALU_SRA; -- not required
-                        else                    ALUOp <= ALU_SRL; -- not required
-                        end if;
                     when "110" => ALUOp <= ALU_OR;
                     when "111" => ALUOp <= ALU_AND;
                     when others => null;
@@ -92,7 +83,7 @@ begin
                 ALUSrc   <= '1';
                 ALUOp    <= ALU_ADD;
 
-            -- Branch: beq, bne, blt, bge, bltu, bgeu
+            -- Branch: beq, bne, blt, bge
             when OP_BRANCH =>
                 Branch <= '1';
                 case funct3 is
@@ -100,8 +91,6 @@ begin
                     when "001" => BrType <= BR_BNE;
                     when "100" => BrType <= BR_BLT;
                     when "101" => BrType <= BR_BGE;
-                    when "110" => BrType <= BR_BLTU; -- not required
-                    when "111" => BrType <= BR_BGEU; -- not required
                     when others => null;
                 end case;
 
