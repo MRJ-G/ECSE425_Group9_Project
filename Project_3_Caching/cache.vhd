@@ -186,11 +186,14 @@ begin
 						state <= DONE;
 					ELSE -- miss
 						IF need_write_back(cache_address) THEN
+							m_addr_reg <= evict_block_addr(cache_address); --set up m_addr
+							m_writedata_reg <= cache_array(cache_address.index).data(7 downto 0); 
 							resolved_main_addr <= evict_block_addr(cache_address);
 							write_data_buffer <= cache_array(cache_address.index).data;
 							write_byte_count <= 0;
 							state <= WRITE_MEM;
 						ELSE
+							m_addr_reg <= resolve_main_addr(cache_address); --set up m_addr
 							resolved_main_addr <= resolve_main_addr(cache_address);
 							read_data_buffer <= (OTHERS => '0');
 							read_byte_count <= 0;
@@ -210,6 +213,7 @@ begin
 					ELSIF m_waitrequest = '0' AND write_byte_count = block_size/8-1 THEN
 						-- All bytes written, now read new block
 						resolved_main_addr <= resolve_main_addr(cache_address);
+					 	m_addr_reg <= resolve_main_addr(cache_address); --setup
 						read_data_buffer <= (OTHERS => '0');
 						read_byte_count <= 0;
 						state <= READ_MEM;
@@ -228,11 +232,11 @@ begin
 						read_byte_count <= read_byte_count + 1;
 						state <= READ_MEM_NEXT;  -- Go to next state to generate m_read pulse
 					ELSIF m_waitrequest = '0' AND read_byte_count = block_size/8-1 THEN
-						-- Last byte read, update cache
 						read_data_buffer((read_byte_count+1)*8-1 downto read_byte_count*8) <= m_readdata;
 						-- Update cache block with new data using temp_block
 						temp_block.data := read_data_buffer;
-
+						-- Update the last byte
+						temp_block.data((read_byte_count+1)*8-1 downto read_byte_count*8) := m_readdata;
 						-- Check if it's read miss or write miss
 						if s_write = '1' then
 							
@@ -243,10 +247,10 @@ begin
 						END IF;
 						
 						temp_block.valid := '1';
-						temp_block.tag := cache_address.tag;
+						temp_block.tag := cache_address.tag;					
 						cache_array(cache_address.index) <= temp_block;
 						--added
-						s_readdata_reg <= read_word(cache_address);
+						s_readdata_reg <= temp_block.data((cache_address.offset+4)*8-1 downto cache_address.offset*8);
 						state <= DONE;
 					END IF;
 				WHEN READ_MEM_NEXT =>

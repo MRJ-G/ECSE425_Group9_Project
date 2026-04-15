@@ -30,8 +30,7 @@ package pipeline_types is
     constant BR_BNE  : std_logic_vector(2 downto 0) := "010";
     constant BR_BLT  : std_logic_vector(2 downto 0) := "011";
     constant BR_BGE  : std_logic_vector(2 downto 0) := "100";
-    constant BR_BLTU : std_logic_vector(2 downto 0) := "101"; -- bonus feature
-    constant BR_BGEU : std_logic_vector(2 downto 0) := "110"; -- bonus feature
+
 
     -- RISC-V opcodes
     constant OP_RTYPE  : std_logic_vector(6 downto 0) := "0110011";
